@@ -43,7 +43,15 @@ pip install -r requirements.txt
    - In config.py, set the BASE_MODEL variable to your base model of choice from HuggingFace.
    - Keep in mind it's better to have a small, lightweight model if you plan on finetuning.
 
+## Data Scraper Info
 
+1. Install node.js
+2. In the hydrant root directory run
+```pip install -e .[dev] to install dependencies.
+npm install to install dependencies.
+```
+3. Update the backend to get the data. 
+run ``` python3 -m scrapers ```
 
 ## Repository Organization
 
