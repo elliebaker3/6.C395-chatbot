@@ -1,0 +1,612 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "title": "Class Override",
+  "description": "Overrides for classes in the scraper",
+  "type": "object",
+  "additionalProperties": {
+    "title": "Raw class",
+    "description": "The raw class format produced by the scraper.",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "number": {
+        "type": "string",
+        "title": "Number",
+        "description": "Class number",
+        "examples": ["6.3900"]
+      },
+      "oldNumber": {
+        "type": "string",
+        "title": "Formerly known as",
+        "description": "Old class number",
+        "examples": ["6.036"]
+      },
+      "course": {
+        "type": "string",
+        "title": "Course",
+        "description": "Course number",
+        "examples": ["6"]
+      },
+      "subject": {
+        "type": "string",
+        "title": "Subject",
+        "description": "Subject number without course",
+        "examples": ["3900"]
+      },
+      "tba": {
+        "type": "boolean",
+        "title": "TBA",
+        "description": "True if some section is not scheduled yet"
+      },
+      "sectionKinds": {
+        "type": "array",
+        "title": "Section Kinds",
+        "uniqueItems": true,
+        "description": "Kinds of sections (among LECTURE, RECITATION, LAB, DESIGN) that exist",
+        "items": {
+          "type": "string",
+          "oneOf": [
+            {
+              "const": "lecture",
+              "title": "Lecture"
+            },
+            {
+              "const": "recitation",
+              "title": "Recitation"
+            },
+            {
+              "const": "lab",
+              "title": "Lab"
+            },
+            {
+              "const": "design",
+              "title": "Design"
+            }
+          ]
+        }
+      },
+      "lectureSections": {
+        "type": "array",
+        "title": "Lecture sections",
+        "description": "Lecture timeslots and rooms",
+        "items": {
+          "$ref": "#/$defs/rawSection"
+        }
+      },
+      "recitationSections": {
+        "type": "array",
+        "title": "Recitation sections",
+        "description": "Recitation timeslots and rooms",
+        "items": {
+          "$ref": "#/$defs/rawSection"
+        }
+      },
+      "labSections": {
+        "type": "array",
+        "title": "Lab sections",
+        "description": "Lab timeslots and rooms",
+        "items": {
+          "$ref": "#/$defs/rawSection"
+        }
+      },
+      "designSections": {
+        "type": "array",
+        "title": "Design sections",
+        "description": "Design timeslots and rooms",
+        "items": {
+          "$ref": "#/$defs/rawSection"
+        }
+      },
+      "lectureRawSections": {
+        "type": "array",
+        "title": "Lecture sections (raw)",
+        "description": "Raw lecture times",
+        "examples": ["T9.301-11", "TR1,F2"],
+        "items": {
+          "type": "string"
+        }
+      },
+      "recitationRawSections": {
+        "type": "array",
+        "title": "Recitation sections (raw)",
+        "description": "Raw recitation times",
+        "examples": ["T9.301-11", "TR1,F2"],
+        "items": {
+          "type": "string"
+        }
+      },
+      "labRawSections": {
+        "type": "array",
+        "title": "Lab sections (raw)",
+        "description": "Raw lab times",
+        "examples": ["T9.301-11", "TR1,F2"],
+        "items": {
+          "type": "string"
+        }
+      },
+      "designRawSections": {
+        "type": "array",
+        "title": "Design sections (raw)",
+        "description": "Raw design times",
+        "examples": ["T9.301-11", "TR1,F2"],
+        "items": {
+          "type": "string"
+        }
+      },
+      "hass": {
+        "type": "array",
+        "title": "HASS",
+        "description": "HASS designation (if any)",
+        "items": {
+          "type": "string",
+          "oneOf": [
+            {
+              "const": "H",
+              "title": "HASS-H"
+            },
+            {
+              "const": "A",
+              "title": "HASS-A"
+            },
+            {
+              "const": "S",
+              "title": "HASS-S"
+            },
+            {
+              "const": "E",
+              "title": "HASS-E"
+            }
+          ]
+        },
+        "uniqueItems": true
+      },
+      "comms": {
+        "type": "string",
+        "title": "CI-H",
+        "description": "Communications Intensive designation",
+        "oneOf": [
+          {
+            "const": "",
+            "title": "Not a CI"
+          },
+          {
+            "const": "CI-H",
+            "title": "CI-H"
+          },
+          {
+            "const": "CI-HW",
+            "title": "CI-HW"
+          }
+        ]
+      },
+      "gir": {
+        "type": "string",
+        "title": "GIR",
+        "description": "GIR designation",
+        "oneOf": [
+          {
+            "const": "",
+            "title": "Not a GIR"
+          },
+          {
+            "const": "BIOL",
+            "title": "Biology"
+          },
+          {
+            "const": "CAL1",
+            "title": "Calculus 1"
+          },
+          {
+            "const": "CAL2",
+            "title": "Calculus 2"
+          },
+          {
+            "const": "CHEM",
+            "title": "Chemistry"
+          },
+          {
+            "const": "LAB",
+            "title": "Institute Lab"
+          },
+          {
+            "const": "LAB2",
+            "title": "Partial Lab"
+          },
+          {
+            "const": "PHY1",
+            "title": "Physics 1"
+          },
+          {
+            "const": "PHY2",
+            "title": "Physics 2"
+          },
+          {
+            "const": "REST",
+            "title": "REST"
+          }
+        ]
+      },
+      "cim": {
+        "type": "array",
+        "title": "CI-M",
+        "description": "Array of programs (free text) for which this class is a CI-M",
+        "items": {
+          "type": "string"
+        }
+      },
+      "lectureUnits": {
+        "type": "integer",
+        "title": "Lecture units",
+        "description": "Lecture or recitation units",
+        "minimum": 0
+      },
+      "labUnits": {
+        "type": "integer",
+        "title": "Lab units",
+        "description": "Lab or field work units",
+        "minimum": 0
+      },
+      "preparationUnits": {
+        "type": "integer",
+        "title": "Preparation units",
+        "description": "Outside class units",
+        "minimum": 0
+      },
+      "isVariableUnits": {
+        "type": "boolean",
+        "title": "Units arranged",
+        "description": "Does this class have an arranged number of units? If true, lectureUnits, labUnits, preparationUnits are set to zero."
+      },
+      "level": {
+        "type": "string",
+        "title": "Level",
+        "description": "Subject level (\"U\" or \"G\")",
+        "oneOf": [
+          {
+            "const": "U",
+            "title": "Undergraduate"
+          },
+          {
+            "const": "G",
+            "title": "Graduate"
+          }
+        ]
+      },
+      "same": {
+        "type": "string",
+        "title": "Same as",
+        "description": "Comma-separated list of classes with same number",
+        "examples": ["21A.103, WGS.225"]
+      },
+      "meets": {
+        "type": "string",
+        "title": "Meets with",
+        "description": "Comma-separated list of classes it meets with"
+      },
+      "terms": {
+        "type": "array",
+        "title": "Terms",
+        "description": "Terms class is offered",
+        "items": {
+          "type": "string",
+          "oneOf": [
+            {
+              "const": "FA",
+              "title": "Fall"
+            },
+            {
+              "const": "JA",
+              "title": "January (IAP)"
+            },
+            {
+              "const": "SP",
+              "title": "Spring"
+            },
+            {
+              "const": "SU",
+              "title": "Summer"
+            }
+          ]
+        }
+      },
+      "prereqs": {
+        "type": "string",
+        "title": "Prerequisites",
+        "description": "Prereqs, no specific format (but usually contains class numbers)"
+      },
+      "description": {
+        "type": "string",
+        "title": "Description",
+        "description": "Description (~paragraph that appears in catalog)"
+      },
+      "name": {
+        "type": "string",
+        "title": "Name",
+        "description": "Name of class",
+        "examples": ["Algebra I"]
+      },
+      "inCharge": {
+        "type": "string",
+        "title": "Instructors",
+        "description": "(Person) in-charge",
+        "examples": ["Alyssa Hacker"]
+      },
+      "virtualStatus": {
+        "type": "boolean",
+        "title": "Virtual",
+        "description": "True if meeting virtually"
+      },
+      "nonext": {
+        "type": "boolean",
+        "title": "Not offered next year",
+        "description": "True if NOT offered next year"
+      },
+      "repeat": {
+        "type": "boolean",
+        "title": "Repeatable",
+        "description": "True if class can be repeated for credit"
+      },
+      "url": {
+        "type": "string",
+        "title": "URL",
+        "format": "uri",
+        "description": "Class website"
+      },
+      "final": {
+        "type": "boolean",
+        "title": "Final",
+        "description": "True if has final"
+      },
+      "half": {
+        "title": "Half Semester",
+        "description": "1 or 2 if first / second half",
+        "oneOf": [
+          {
+            "type": "integer",
+            "const": 1,
+            "title": "First Half"
+          },
+          {
+            "type": "integer",
+            "const": 2,
+            "title": "Second Half"
+          },
+          {
+            "type": "boolean",
+            "const": false,
+            "title": "Full Semester"
+          }
+        ]
+      },
+      "limited": {
+        "type": "boolean",
+        "title": "Limited enrollment",
+        "description": "True if limited enrollment"
+      },
+      "new": {
+        "type": "boolean",
+        "title": "New",
+        "description": "True if subject is new"
+      },
+      "rating": {
+        "type": "number",
+        "title": "Rating",
+        "description": "Rating (out of 7.0) from evals",
+        "multipleOf": 0.01,
+        "minimum": 0,
+        "maximum": 7
+      },
+      "hours": {
+        "type": "number",
+        "title": "Hours",
+        "description": "Hours per week from evals",
+        "multipleOf": 0.01,
+        "minimum": 0
+      },
+      "size": {
+        "type": "number",
+        "title": "Size",
+        "description": "Class size from evals",
+        "multipleOf": 0.01,
+        "minimum": 0
+      },
+      "quarterInfo": {
+        "title": "Quarter Info",
+        "type": "object",
+        "properties": {
+          "start": {
+            "title": "Start Date",
+            "$ref": "#/$defs/quarterDate"
+          },
+          "end": {
+            "title": "End Date",
+            "$ref": "#/$defs/quarterDate"
+          }
+        }
+      },
+      "include": {
+        "type": "boolean",
+        "title": "Include",
+        "description": "True if class should be included in final output, even if not in catalog"
+      }
+    },
+    "allOf": [
+      {
+        "if": {
+          "anyOf": [
+            {
+              "properties": {
+                "lectureUnits": {
+                  "not": {
+                    "const": 0
+                  }
+                }
+              },
+              "required": ["lectureUnits"]
+            },
+            {
+              "properties": {
+                "labUnits": {
+                  "not": {
+                    "const": 0
+                  }
+                }
+              },
+              "required": ["labUnits"]
+            },
+            {
+              "properties": {
+                "preparationUnits": {
+                  "not": {
+                    "const": 0
+                  }
+                }
+              },
+              "required": ["preparationUnits"]
+            }
+          ]
+        },
+        "then": {
+          "properties": {
+            "isVariableUnits": {
+              "const": false
+            }
+          },
+          "required": [
+            "lectureUnits",
+            "labUnits",
+            "preparationUnits",
+            "isVariableUnits"
+          ]
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "isVariableUnits": {
+              "const": true
+            }
+          },
+          "required": ["isVariableUnits"]
+        },
+        "then": {
+          "properties": {
+            "lectureUnits": {
+              "const": 0
+            },
+            "labUnits": {
+              "const": 0
+            },
+            "preparationUnits": {
+              "const": 0
+            }
+          },
+          "required": ["lectureUnits", "labUnits", "preparationUnits"]
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "include": {
+              "const": true
+            }
+          },
+          "required": ["include"]
+        },
+        "then": {
+          "required": [
+            "nonext",
+            "repeat",
+            "url",
+            "final",
+            "half",
+            "limited",
+            "new",
+            "number",
+            "course",
+            "subject",
+            "terms",
+            "prereqs",
+            "sectionKinds",
+            "tba",
+            "hass",
+            "comms",
+            "gir",
+            "lectureUnits",
+            "labUnits",
+            "preparationUnits",
+            "level",
+            "isVariableUnits",
+            "same",
+            "meets",
+            "description",
+            "name",
+            "inCharge",
+            "virtualStatus",
+            "rating",
+            "hours",
+            "size"
+          ]
+        }
+      }
+    ]
+  },
+  "$defs": {
+    "rawTimeSlot": {
+      "type": "array",
+      "title": "Raw timeslot",
+      "description": "Raw timeslot format: [start slot, length of timeslot].",
+      "items": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMaximum": 170
+        },
+        {
+          "type": "integer",
+          "minimum": 0
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "rawSection": {
+      "type": "array",
+      "title": "Raw section",
+      "description": "Raw section format: [[[10, 2], [70, 2]], \"34-101\"].",
+      "items": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rawTimeSlot"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "quarterDate": {
+      "type": "array",
+      "title": "Quarter date",
+      "description": "Date format for calendar day: [month, day].",
+      "additionalItems": false,
+      "items": [
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 31
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

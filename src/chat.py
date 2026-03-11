@@ -1,6 +1,9 @@
 from huggingface_hub import InferenceClient
 from config import BASE_MODEL, MY_MODEL, HF_TOKEN
 
+
+SYSTEM
+
 class Chatbot:
     """
     This class is extra scaffolding around a model. Modify this class to specify how the model recieves prompts and generates responses.
