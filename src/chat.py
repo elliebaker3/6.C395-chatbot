@@ -70,7 +70,7 @@ Respond with only "YES" if it's about MIT courses/course selection/catalog, or "
             mit_course_keywords = ['course', 'class', 'mit', 'catalog', 'prerequisite', 'schedule', 'department', 'instructor', 'ci-h', 'hass', 'rest', 'distribution', 'major', 'minor', 'enroll', 'registration', '6-', 'subject', 'units']
             return any(keyword.lower() in user_input.lower() for keyword in mit_course_keywords)
     
-    def format_prompt(self, user_input, include_data=True):
+    def format_prompt(self, user_input, include_data=True, history=None):
         """
         TODO: Implement this method to format the user's input into a proper prompt.
         
@@ -92,7 +92,7 @@ Respond with only "YES" if it's about MIT courses/course selection/catalog, or "
              Assistant:"
         """
         # Create system message with MIT course catalog context
-        system_message = """You are a helpful assistant specialized in helping MIT students navigate the MIT course catalog. 
+        SYSTEM_MESSAGE = """You are a helpful assistant specialized in helping MIT students navigate the MIT course catalog. 
 You help students find courses that match their constraints and interests, including:
 - Prerequisites
 - Schedules and class times
@@ -124,13 +124,18 @@ User question: {user_input}"""
         
         # Format for Llama-3.1-Instruct chat template
         messages = [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_message}
+            {"role": "system", "content": SYSTEM_MESSAGE}
         ]
         
+        if history:
+            for user_msg, bot_msg in history:
+                messages.append({"role": "user", "content": user_msg})
+                messages.append({"role": "assistant", "content": bot_msg})
+
+        messages.append({"role": "user", "content": user_message})
         return messages
         
-    def get_response(self, user_input):
+    def get_response(self, user_input, history=None):
         """
         TODO: Implement this method to generate responses to user questions.
         
@@ -154,7 +159,7 @@ User question: {user_input}"""
             return "I'm sorry, I can only help with questions about MIT courses, the course catalog, course selection, prerequisites, schedules, distribution requirements, and academic planning at MIT. Please ask me about MIT courses!"
         
         # Format the prompt with school data
-        messages = self.format_prompt(user_input, include_data=True)
+        messages = self.format_prompt(user_input, include_data=True, history=history)
         
         # Generate response using the InferenceClient
         # The InferenceClient handles the chat template formatting automatically
