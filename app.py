@@ -61,7 +61,7 @@ def create_chatbot():
         """
         # TODO: Generate and return response
         # Generate response using the chatbot
-        response = chatbot.get_response(message)
+        response = chatbot.get_response(message, history)
         return response
 
     

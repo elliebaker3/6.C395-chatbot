@@ -27,7 +27,7 @@ class Chatbot:
             self.course_data = {}
             print("Warning: data.json not found. MIT course catalog data will not be available.")
         
-    def is_mit_course_question(self, user_input):
+    def is_mit_course_question(self, user_input, history):
         """
         Classify whether the question is related to MIT course selection.
         
@@ -37,17 +37,29 @@ class Chatbot:
         Returns:
             bool: True if the question is about MIT courses, False otherwise
         """
+        # iterate through the last 3 histories, if they exist and concatenate them into a single string
+        history_str = ""
+        if history:
+            def _extract_text(history):
+                return [
+                    c["text"]
+                    for msg in history
+                    for c in msg.get("content", [])
+                    if c.get("type") == "text"
+                ]
+            history_str = "\n".join(_extract_text(history[-3:]))
         # Classification prompt focused on MIT course selection
         classification_prompt = f"""Classify whether the following question is about MIT courses, course selection, the MIT course catalog, prerequisites, class schedules, distribution requirements (CI-H, HASS, REST), departments, instructors, or academic planning at MIT. 
+            Conversation history: {history_str}
+            Question: "{user_input}"
 
-Question: "{user_input}"
-
-Respond with only "YES" if it's about MIT courses/course selection/catalog, or "NO" if it's about something else."""
+            Respond with only "YES" if the user question is relevant in the conversation history
+            or can be directly about MIT courses/course selection/catalog, or "NO" if it's about something else."""
 
         try:
             messages = [
                 {"role": "system", "content": "You are a classification assistant. Respond with only YES or NO."},
-                {"role": "user", "content": classification_prompt}
+                {"role": "user", "content": classification_prompt + "\n\n" + history_str}
             ]
             
             response = self.client.chat_completion(
@@ -92,28 +104,7 @@ Respond with only "YES" if it's about MIT courses/course selection/catalog, or "
              Assistant:"
         """
         # Create system message with MIT course catalog context
-        SYSTEM_MESSAGE = """You are a helpful assistant specialized in helping MIT students navigate the MIT course catalog. 
-You help students find courses that match their constraints and interests, including:
-- Prerequisites
-- Schedules and class times
-- Departments and course numbers (e.g., 6-3, 18-06)
-- Distribution requirements (CI-H, HASS, REST)
-- Instructors
-- Class formats (lecture, recitation, lab, etc.)
-- Course descriptions and topics
 
-When a student provides constraints (like "I'm a 6-3 junior who needs a CI-H, prefers afternoon classes, and is interested in AI ethics"), reason across all those dimensions to find matching courses.
-
-Use the provided MIT course catalog data to answer questions accurately. If you don't know something from the data, say so. Be specific about course numbers, prerequisites, and requirements.
-
-**Formatting:** Always present data in a user-friendly manner before showing it to the user. Do not dump raw JSON or unstructured lists. Instead:
-- Use clear headings and short paragraphs where appropriate.
-- List courses with bullet points; include course number, title, and key details (e.g. time, instructor, requirements) in readable form.
-- Group related information (e.g. by department or requirement type) when listing multiple courses.
-- Don't include any information that is not in the data.json file.
-- Don't repeat the same information in the response.
-- Use plain language and avoid technical keys or internal field names."""
-        
         # Include MIT course catalog data in the context if available
         user_message = user_input
         if include_data and self.course_data:
@@ -126,23 +117,42 @@ Use the provided MIT course catalog data to answer questions accurately. If you 
                 data_str = data_str[:3000] + "...\n[Note: MIT course catalog data truncated for length]"
             
             user_message = f"""MIT Course Catalog Data (from data.json):
-{data_str}
+                            {data_str}
 
-User question: {user_input}"""
+                            User question: {user_input}"""
         
         # Format for Llama-3.1-Instruct chat template
+        with open('prompts/system_prompt_draft.txt', 'r') as f:
+            system_prompt_txt = f.read()
         messages = [
-            {"role": "system", "content": SYSTEM_MESSAGE}
+            {"role": "system", "content": system_prompt_txt}
         ]
         
-        if history:
-            for user_msg, bot_msg in history:
-                messages.append({"role": "user", "content": user_msg})
-                messages.append({"role": "assistant", "content": bot_msg})
-
         messages.append({"role": "user", "content": user_message})
         return messages
-        
+
+    def _summarize_history(self, history):
+        """
+        Summarize the conversation history for the model.
+        """
+        with open('prompts/conversation_history_manager.txt', 'r') as f:
+            conversation_history_manager_txt = f.read()
+
+        try:
+            messages = [
+                {"role": "system", "content": conversation_history_manager_txt},
+                {"role": "user", "content": history[:3]}
+            ]
+
+            response = self.client.chat_completion(
+                messages=messages,
+                max_tokens=512,
+                temperature=0.7
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            return conversation_history_manager_txt  # fallback on error
+
     def get_response(self, user_input, history=None):
         """
         TODO: Implement this method to generate responses to user questions.
@@ -163,9 +173,16 @@ User question: {user_input}"""
         - Use self.client to generate responses
         """
         # First, classify if this is an MIT course question
-        if not self.is_mit_course_question(user_input):
+        if not self.is_mit_course_question(user_input, history):
             return "I'm sorry, I can only help with questions about MIT courses, the course catalog, course selection, prerequisites, schedules, distribution requirements, and academic planning at MIT. Please ask me about MIT courses!"
         
+        if history and len(history) > 3:
+            ### we want to call the summarize history function here
+            summarized_history = self._summarize_history(history)
+            # for user_msg, bot_msg in history:
+            #     messages.append({"role": "user", "content": user_msg})
+            #     messages.append({"role": "assistant", "content": bot_msg})
+
         # Format the prompt with school data
         messages = self.format_prompt(user_input, include_data=True, history=history)
         
