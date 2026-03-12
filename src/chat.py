@@ -104,7 +104,15 @@ You help students find courses that match their constraints and interests, inclu
 
 When a student provides constraints (like "I'm a 6-3 junior who needs a CI-H, prefers afternoon classes, and is interested in AI ethics"), reason across all those dimensions to find matching courses.
 
-Use the provided MIT course catalog data to answer questions accurately. If you don't know something from the data, say so. Be specific about course numbers, prerequisites, and requirements."""
+Use the provided MIT course catalog data to answer questions accurately. If you don't know something from the data, say so. Be specific about course numbers, prerequisites, and requirements.
+
+**Formatting:** Always present data in a user-friendly manner before showing it to the user. Do not dump raw JSON or unstructured lists. Instead:
+- Use clear headings and short paragraphs where appropriate.
+- List courses with bullet points; include course number, title, and key details (e.g. time, instructor, requirements) in readable form.
+- Group related information (e.g. by department or requirement type) when listing multiple courses.
+- Don't include any information that is not in the data.json file.
+- Don't repeat the same information in the response.
+- Use plain language and avoid technical keys or internal field names."""
         
         # Include MIT course catalog data in the context if available
         user_message = user_input
