@@ -38,6 +38,8 @@ class Chatbot:
             bool: True if the question is about MIT courses, False otherwise
         """
         # iterate through the last 3 histories, if they exist and concatenate them into a single string
+        print(f"Classifying question with {len(history) if history else 0} history items")  # ADD THIS
+
         history_str = ""
         if history:
             def _extract_text(history):
@@ -48,6 +50,8 @@ class Chatbot:
                     if c.get("type") == "text"
                 ]
             history_str = "\n".join(_extract_text(history[-3:]))
+            print(f"History string used for classification: {history_str}")  # ADD THIS
+
         # Classification prompt focused on MIT course selection
         classification_prompt = f"""Classify whether the following question is about MIT courses, course selection, the MIT course catalog, prerequisites, class schedules, distribution requirements (CI-H, HASS, REST), departments, instructors, or academic planning at MIT. 
             Conversation history: {history_str}
@@ -79,8 +83,16 @@ class Chatbot:
             return "YES" in result
         except Exception:
             # Fallback: simple keyword check for MIT course-related terms
-            mit_course_keywords = ['course', 'class', 'mit', 'catalog', 'prerequisite', 'schedule', 'department', 'instructor', 'ci-h', 'hass', 'rest', 'distribution', 'major', 'minor', 'enroll', 'registration', '6-', 'subject', 'units']
+            # Add these to the mit_course_keywords list
+            mit_course_keywords = [
+                'course', 'class', 'mit', 'catalog', 'prerequisite', 'schedule', 
+                'department', 'instructor', 'ci-h', 'hass', 'rest', 'distribution', 
+                'major', 'minor', 'enroll', 'registration', '6-', 'subject', 'units',
+                'undergrad', 'graduate', 'yes', 'no', 'any', 'sure', 'ok', 'afternoon',
+                'morning', 'evening', 'spring', 'fall', 'semester'
+            ]
             return any(keyword.lower() in user_input.lower() for keyword in mit_course_keywords)
+        
     
     def format_prompt(self, user_input, include_data=True, history=None):
         """
@@ -128,22 +140,29 @@ class Chatbot:
             {"role": "system", "content": system_prompt_txt}
         ]
         
+        # ADD THIS BLOCK HERE
+        if history:
+            for msg in history:
+                role = msg.get("role")
+                content = msg.get("content")
+                if isinstance(content, list):
+                    text = " ".join(c.get("text", "") for c in content if c.get("type") == "text")
+                else:
+                    text = content or ""
+                if role in ("user", "assistant") and text:
+                    messages.append({"role": role, "content": text})
+        
         messages.append({"role": "user", "content": user_message})
         return messages
 
     def _summarize_history(self, history):
-        """
-        Summarize the conversation history for the model.
-        """
         with open('prompts/conversation_history_manager.txt', 'r') as f:
             conversation_history_manager_txt = f.read()
-
         try:
             messages = [
                 {"role": "system", "content": conversation_history_manager_txt},
-                {"role": "user", "content": history[:3]}
+                {"role": "user", "content": str(history)}  # FIXED - convert to string
             ]
-
             response = self.client.chat_completion(
                 messages=messages,
                 max_tokens=512,
@@ -151,37 +170,33 @@ class Chatbot:
             )
             return response.choices[0].message.content
         except Exception as e:
-            return conversation_history_manager_txt  # fallback on error
+            print(f"Summarization error: {e}")  # FIXED - print actual error
+            return conversation_history_manager_txt
 
     def get_response(self, user_input, history=None):
-        """
-        TODO: Implement this method to generate responses to user questions.
-        
-        This method should:
-        1. Use format_prompt() to prepare the input
-        2. Generate a response using the model
-        3. Clean up and return the response
-
-        Args:
-            user_input (str): The user's question
-
-        Returns:
-            str: The chatbot's response
-
-        Implementation tips:
-        - Use self.format_prompt() to format the user's input
-        - Use self.client to generate responses
-        """
+        print(f"\n--- New Message ---")
+        print(f"User input: {user_input}")  # ADD THIS
+        print(f"History length: {len(history) if history else 0}")  # ADD THIS
+        print(f"History contents: {history}")  # ADD THIS
         # First, classify if this is an MIT course question
         if not self.is_mit_course_question(user_input, history):
+            print("Classified as: NOT an MIT course question")  # ADD THIS
             return "I'm sorry, I can only help with questions about MIT courses, the course catalog, course selection, prerequisites, schedules, distribution requirements, and academic planning at MIT. Please ask me about MIT courses!"
+        print("Classified as: MIT course question ✓")  # ADD THIS
+
         
         if history and len(history) > 3:
-            ### we want to call the summarize history function here
-            summarized_history = self._summarize_history(history)
-            # for user_msg, bot_msg in history:
-            #     messages.append({"role": "user", "content": user_msg})
-            #     messages.append({"role": "assistant", "content": bot_msg})
+            early_history = history[:-2]  # everything except last q&a
+            recent_history = history[-2:]  # always keep the most recent q&a
+            
+            summarized_history = self._summarize_history(early_history)
+            
+            history = [
+                {"role": "assistant", "content": summarized_history, "metadata": None, "options": None}
+            ] + recent_history
+            
+            print(f"New history length: {len(history)}")
+            print(f"New history: {history}")
 
         # Format the prompt with school data
         messages = self.format_prompt(user_input, include_data=True, history=history)
@@ -190,6 +205,7 @@ class Chatbot:
         # The InferenceClient handles the chat template formatting automatically
         # Use chat_completion for conversational models
         try:
+            print("Sending request to HuggingFace API...")  # ADD THIS
             response = self.client.chat_completion(
                 messages=messages,
                 max_tokens=512,
