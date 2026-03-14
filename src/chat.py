@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from huggingface_hub import InferenceClient
 from config import BASE_MODEL, MY_MODEL, HF_TOKEN
@@ -38,6 +39,12 @@ class Chatbot:
             print("Warning: data.json not found. MIT course catalog data will not be available.")
         if path.exists():
             rag.ensure_index(DATA_PATH)
+        
+        # Persistent context for specific professors/courses mentioned in conversation
+        self._persistent_context = {
+            "professors": {},  # {professor_name: [course_chunks]}
+            "courses": {}     # {course_number: course_chunk}
+        }
         
     def is_mit_course_question(self, user_input, history):
         """
@@ -132,7 +139,507 @@ class Chatbot:
                 'morning', 'evening', 'spring', 'fall', 'semester'
             ]
             return any(keyword.lower() in user_input.lower() for keyword in mit_course_keywords)
+    
+    def _detect_specific_entities(self, user_input, history=None):
+        """
+        Detect if a specific professor or course number is mentioned.
+        Returns tuple: (professor_names: set, course_numbers: set)
+        """
+        import re
         
+        professor_names = set()
+        course_numbers = set()
+        
+        # Pattern to match MIT course numbers
+        course_pattern = r'\b(\d+[\.-]\d+[A-Z]?)\b'
+        
+        # Extract course numbers from current input
+        matches = re.findall(course_pattern, user_input)
+        course_numbers.update(matches)
+        
+        # Extract course numbers from history
+        if history:
+            for msg in history[-5:]:  # Check last 5 exchanges
+                if isinstance(msg, tuple) and len(msg) == 2:
+                    user_msg, assistant_msg = msg
+                    text = (user_msg if isinstance(user_msg, str) else str(user_msg)) + " " + (assistant_msg if isinstance(assistant_msg, str) else str(assistant_msg))
+                    matches = re.findall(course_pattern, text)
+                    course_numbers.update(matches)
+        
+        # Detect professor names - look for capitalized name patterns
+        # Patterns that indicate a professor name
+        professor_patterns = [
+            r'(?:professor|prof|instructor|teaches?|teaching|taught by|by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',  # Full names
+            r'(?:professor|prof|instructor|teaches?|teaching|taught by|by)\s+([A-Z][a-z]+)',  # Single names
+            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s+(?:teaches?|teaching|professor|prof)',  # Name before "teaches"
+            r'what\s+(?:courses?|classes?)\s+(?:does|do|is|are)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:teach|teaching)',
+            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\'s\s+(?:courses?|classes?)',
+            r'courses?\s+(?:by|from|with)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)',
+        ]
+        
+        # Also look for standalone capitalized names (2-3 words) that might be professors
+        # This catches queries like "tell me what courses Sendhil Mullainathan is teaching"
+        standalone_name_pattern = r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b'
+        standalone_matches = re.findall(standalone_name_pattern, user_input)
+        
+        for match in standalone_matches:
+            # Filter out common false positives
+            false_positives = {'mit', 'fall', 'spring', 'summer', 'iap', 'course', 'class', 'student', 
+                             'students', 'semester', 'term', 'year', 'department', 'major', 'minor'}
+            if match.lower() not in false_positives and len(match.split()) >= 2:
+                # Check if it appears in a context suggesting it's a professor
+                context_before = user_input[:user_input.find(match)].lower()
+                context_after = user_input[user_input.find(match) + len(match):].lower()
+                if any(word in context_before or word in context_after for word in 
+                       ['teach', 'teaching', 'professor', 'prof', 'instructor', 'course', 'class']):
+                    professor_names.add(match.strip())
+        
+        for pattern in professor_patterns:
+            matches = re.findall(pattern, user_input, re.IGNORECASE)
+            for match in matches:
+                if isinstance(match, tuple):
+                    match = match[0] if match else ""
+                if match:
+                    # Filter false positives
+                    if match.lower() not in ['mit', 'fall', 'spring', 'summer', 'iap']:
+                        professor_names.add(match.strip())
+        
+        # Also check history for professor mentions
+        if history:
+            for msg in history[-5:]:
+                if isinstance(msg, tuple) and len(msg) == 2:
+                    user_msg, assistant_msg = msg
+                    text = (user_msg if isinstance(user_msg, str) else str(user_msg)) + " " + (assistant_msg if isinstance(assistant_msg, str) else str(assistant_msg))
+                    for pattern in professor_patterns:
+                        matches = re.findall(pattern, text, re.IGNORECASE)
+                        for match in matches:
+                            if isinstance(match, tuple):
+                                match = match[0] if match else ""
+                            if match and match.lower() not in ['mit', 'fall', 'spring', 'summer', 'iap']:
+                                professor_names.add(match.strip())
+        
+        return professor_names, course_numbers
+
+    def extract_entities_from_final_response(self, assistant_response):
+        """
+        Use an inference call on the FINAL assistant response text to extract
+        structured entities for quick lookup.
+
+        Returns:
+            dict: {"courses": [...], "professors": [...]}
+        """
+        if not assistant_response or not str(assistant_response).strip():
+            return {"courses": [], "professors": []}
+
+        extractor_system = (
+            "You extract MIT course numbers and professor names from assistant text. "
+            "Return ONLY valid JSON with this exact schema: "
+            "{\"courses\": [\"...\"], \"professors\": [\"...\"]}. "
+            "Do not include explanations."
+        )
+        extractor_user = (
+            "Extract the course numbers and professor names present in this text.\n\n"
+            f"TEXT:\n{assistant_response}"
+        )
+
+        try:
+            response = self.client.chat_completion(
+                messages=[
+                    {"role": "system", "content": extractor_system},
+                    {"role": "user", "content": extractor_user},
+                ],
+                max_tokens=220,
+                temperature=0.0,
+            )
+
+            if hasattr(response, "choices") and len(response.choices) > 0:
+                raw = response.choices[0].message.content or ""
+            elif isinstance(response, dict) and "choices" in response:
+                raw = response["choices"][0]["message"]["content"] or ""
+            else:
+                raw = str(response)
+
+            # Strip markdown fences if present.
+            raw = raw.strip()
+            raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
+            raw = re.sub(r"\s*```$", "", raw)
+
+            # Keep only the first JSON object if extra text appears.
+            start = raw.find("{")
+            end = raw.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                raw = raw[start:end + 1]
+
+            parsed = json.loads(raw)
+            courses = parsed.get("courses", []) if isinstance(parsed, dict) else []
+            professors = parsed.get("professors", []) if isinstance(parsed, dict) else []
+
+            # Normalize and dedupe while preserving order.
+            def _clean_list(items):
+                seen = set()
+                cleaned = []
+                for item in items or []:
+                    text = str(item).strip()
+                    if text and text not in seen:
+                        seen.add(text)
+                        cleaned.append(text)
+                return cleaned
+
+            return {
+                "courses": _clean_list(courses),
+                "professors": _clean_list(professors),
+            }
+        except Exception:
+            # Fallback to deterministic extraction from final response only.
+            profs, courses = self._detect_specific_entities(str(assistant_response), history=None)
+            return {
+                "courses": sorted(list(courses)),
+                "professors": sorted(list(profs)),
+            }
+
+    def _parse_structured_model_output(self, raw_text):
+        """
+        Parse model output expected in the format:
+        response: ...
+        courses: ...
+        professors: ...
+        """
+        text = (raw_text or "").strip()
+        if not text:
+            return {"response": "", "courses": [], "professors": [], "raw": raw_text}
+
+        # Strip markdown fences if present.
+        text = re.sub(r"^```(?:\w+)?\s*", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s*```$", "", text)
+
+        # Try strict section parsing first.
+        m = re.search(
+            r"response:\s*(.*?)\n\s*courses:\s*(.*?)\n\s*professors:\s*(.*)$",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+        if m:
+            response_text = m.group(1).strip()
+            courses_raw = m.group(2).strip()
+            profs_raw = m.group(3).strip()
+        else:
+            # Tolerant fallback: parse whatever labels exist and NEVER leak metadata
+            # into user-facing response.
+            courses_match = re.search(r"(?im)^\s*courses:\s*(.*)$", text)
+            profs_match = re.search(r"(?im)^\s*professors:\s*(.*)$", text)
+            response_match = re.search(r"(?im)^\s*response:\s*(.*)$", text)
+
+            courses_raw = courses_match.group(1).strip() if courses_match else ""
+            profs_raw = profs_match.group(1).strip() if profs_match else ""
+
+            # If "response:" label exists, prefer content after that label.
+            if response_match:
+                response_text = response_match.group(1).strip()
+            else:
+                # Otherwise, keep text before first metadata label.
+                label_positions = []
+                if courses_match:
+                    label_positions.append(courses_match.start())
+                if profs_match:
+                    label_positions.append(profs_match.start())
+                first_label_pos = min(label_positions) if label_positions else None
+                if first_label_pos is not None:
+                    response_text = text[:first_label_pos].strip()
+                else:
+                    response_text = text.strip()
+
+            # If response still starts with "response:", strip it.
+            response_text = re.sub(r"(?is)^\s*response:\s*", "", response_text).strip()
+
+        def _is_none_like(value):
+            text = (value or "").strip().lower()
+            if not text:
+                return True
+            none_patterns = [
+                r"^none$",
+                r"^none listed$",
+                r"^none mentioned$",
+                r"^none provided$",
+                r"^not mentioned$",
+                r"^not listed$",
+                r"^n/?a$",
+                r"^null$",
+                r"^\[\]$",
+                r"^no courses?.*$",
+                r"^no professors?.*$",
+                r"^no instructors?.*$",
+                r"^no names?.*$",
+            ]
+            return any(re.match(pattern, text) for pattern in none_patterns)
+
+        def _split_entities(value):
+            if not value:
+                return []
+            if _is_none_like(value):
+                return []
+            items = [v.strip() for v in value.split(",")]
+            seen = set()
+            out = []
+            for item in items:
+                if not item or _is_none_like(item):
+                    continue
+                if item not in seen:
+                    seen.add(item)
+                    out.append(item)
+            return out
+
+        return {
+            "response": response_text,
+            "courses": _split_entities(courses_raw),
+            "professors": _split_entities(profs_raw),
+            "raw": raw_text,
+        }
+
+    def get_response_bundle(self, user_input, history=None):
+        """
+        Generate the final assistant output in structured format and parse it.
+        Returns:
+            dict: {response: str, courses: list[str], professors: list[str], raw: str}
+        """
+        if not self.is_mit_course_question(user_input, history):
+            msg = (
+                "I'm sorry, I can only help with questions about MIT courses, the course catalog, "
+                "course selection, prerequisites, schedules, distribution requirements, and academic "
+                "planning at MIT. Please ask me about MIT courses!"
+            )
+            return {"response": msg, "courses": [], "professors": [], "raw": msg}
+
+        if history and len(history) > 3:
+            early_history = history[:-2]
+            recent_history = history[-2:]
+            summarized_history = self._summarize_history(early_history)
+            history = recent_history
+            self._history_summary = summarized_history
+
+        messages = self.format_prompt(user_input, include_data=True, history=history)
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "Return your output in EXACTLY this format:\n"
+                    "response: <the user-facing answer only>\n"
+                    "courses: <comma-separated MIT course numbers mentioned anywhere in the response, or none>\n"
+                    "professors: <comma-separated professor names mentioned anywhere in the response, or none>\n"
+                    "You must ALWAYS include both the courses: line and the professors: line, even if the answer is none.\n"
+                    "If the response mentions a course or professor, it must also appear in the corresponding line.\n"
+                    "Do not add any extra sections."
+                ),
+            }
+        )
+
+        try:
+            print("Sending request to HuggingFace API...")
+            response = self.client.chat_completion(
+                messages=messages,
+                max_tokens=1500,
+                temperature=0.7,
+            )
+            if hasattr(response, "choices") and len(response.choices) > 0:
+                raw_text = response.choices[0].message.content
+            elif isinstance(response, dict) and "choices" in response:
+                raw_text = response["choices"][0]["message"]["content"]
+            elif isinstance(response, dict) and "generated_text" in response:
+                raw_text = response["generated_text"]
+            else:
+                raw_text = str(response)
+
+            parsed = self._parse_structured_model_output(raw_text)
+            # Backfill structured metadata if the model omitted it.
+            if not parsed.get("courses") or not parsed.get("professors"):
+                extracted = self.extract_entities_from_final_response(parsed.get("response", ""))
+                if not parsed.get("courses"):
+                    parsed["courses"] = extracted.get("courses", [])
+                if not parsed.get("professors"):
+                    parsed["professors"] = extracted.get("professors", [])
+            # Add truncation hint only to the user-facing response.
+            response_text = parsed.get("response", "")
+            if response_text and not response_text.strip().endswith((".", "!", "?", ":")):
+                if any(indicator in response_text[-50:] for indicator in ["**", "Units:", "Schedule:", "Why it fits:"]):
+                    parsed["response"] = response_text + "\n\n[Note: Response may have been truncated. Please ask for more details if needed.]"
+            return parsed
+        except Exception as e:
+            error_msg = f"Error generating response: {str(e)}. Please check your HF_TOKEN and model access."
+            return {"response": error_msg, "courses": [], "professors": [], "raw": error_msg}
+
+    def summarize_entity_relevance(self, entity_type, entity_name, conversation_text):
+        """
+        Generate a short (1-2 sentence or brief bullet) explanation of how an entity
+        is relevant to the conversation so far.
+        """
+        try:
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You explain the relevance of an MIT course or professor to a student course-selection conversation. "
+                        "Return 2-4 concise but informative bullet points OR 2-3 short sentences. "
+                        "Mention why it mattered in the discussion, such as requirement fit, topic fit, instructor relevance, schedule fit, or prerequisite relevance. "
+                        "Be specific, helpful, and grounded only in the provided conversation."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Entity type: {entity_type}\n"
+                        f"Entity name: {entity_name}\n\n"
+                        f"Conversation so far:\n{conversation_text}\n\n"
+                        "Output only the relevance summary."
+                    ),
+                },
+            ]
+            response = self.client.chat_completion(
+                messages=messages,
+                max_tokens=140,
+                temperature=0.3,
+            )
+            if hasattr(response, "choices") and len(response.choices) > 0:
+                return (response.choices[0].message.content or "").strip()
+            if isinstance(response, dict) and "choices" in response:
+                return (response["choices"][0]["message"]["content"] or "").strip()
+            return str(response).strip()
+        except Exception:
+            # Safe fallback if summarization call fails.
+            if entity_type == "course":
+                return f"- Mentioned as a potentially relevant course option in this discussion."
+            return f"- Mentioned as a professor connected to courses discussed in this conversation."
+
+    def dedupe_professor_name(self, candidate_name, existing_names):
+        """
+        Use the model to decide whether a new professor mention is the same person
+        as one already present (e.g. 'Sendhil Mullainathan' vs 'S. Mullainathan').
+        Returns the canonical existing name if matched, else the original candidate.
+        """
+        existing_names = [name for name in (existing_names or []) if name]
+        candidate_name = (candidate_name or "").strip()
+        if not candidate_name or not existing_names:
+            return candidate_name
+
+        try:
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You resolve whether professor names refer to the same person. "
+                        "Return exactly one line. Either return one exact existing name from the provided list, "
+                        "or return NEW if none match."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Candidate professor name: {candidate_name}\n"
+                        f"Existing professor names: {', '.join(existing_names)}\n\n"
+                        "If the candidate is the same professor as one of the existing names "
+                        "(including abbreviations or initials), return that exact existing name. "
+                        "Otherwise return NEW."
+                    ),
+                },
+            ]
+            response = self.client.chat_completion(
+                messages=messages,
+                max_tokens=20,
+                temperature=0.0,
+            )
+            if hasattr(response, "choices") and len(response.choices) > 0:
+                answer = (response.choices[0].message.content or "").strip()
+            elif isinstance(response, dict) and "choices" in response:
+                answer = (response["choices"][0]["message"]["content"] or "").strip()
+            else:
+                answer = str(response).strip()
+
+            answer = answer.strip()
+            if answer == "NEW":
+                return candidate_name
+            for existing in existing_names:
+                if answer == existing:
+                    return existing
+            return candidate_name
+        except Exception:
+            return candidate_name
+    
+    def _search_courses_by_professor(self, professor_name):
+        """
+        Search all courses for a specific professor name in inCharge field.
+        Returns list of course chunks.
+        """
+        if not self.course_data:
+            return []
+        
+        classes = self.course_data.get("classes") or {}
+        matching_courses = []
+        
+        # Normalize professor name for matching (handle variations)
+        prof_name_lower = professor_name.lower().strip()
+        prof_parts = prof_name_lower.split()
+        
+        for course_id, course in classes.items():
+            in_charge = course.get("inCharge", "")
+            if not in_charge:
+                continue
+            
+            # Check if professor name appears in inCharge field
+            in_charge_lower = in_charge.lower()
+            
+            # Try different matching strategies
+            # 1. Full name match (e.g., "sendhil mullainathan" in "Sendhil Mullainathan")
+            if prof_name_lower in in_charge_lower:
+                matching_courses.append((course_id, course))
+                continue
+            
+            # 2. Last name match (common format: "J. Smith" or "Smith, J." or "Smith")
+            if len(prof_parts) > 0:
+                last_name = prof_parts[-1]
+                # Check for last name with various formats
+                # "J. Smith", "Smith, J.", "Smith", "Smith J.", etc.
+                last_name_patterns = [
+                    f". {last_name}",  # "J. Smith"
+                    f"{last_name},",   # "Smith, J."
+                    f"{last_name} ",   # "Smith " (followed by space)
+                    f" {last_name}",  # " Smith" (preceded by space)
+                    f"{last_name}.",  # "Smith."
+                ]
+                
+                for pattern in last_name_patterns:
+                    if pattern in in_charge_lower:
+                        matching_courses.append((course_id, course))
+                        break
+                
+                # Also try first initial + last name (e.g., "S. Mullainathan")
+                if len(prof_parts) >= 2:
+                    first_initial = prof_parts[0][0] if prof_parts[0] else ""
+                    last_name = prof_parts[-1]
+                    if first_initial and f"{first_initial}. {last_name}" in in_charge_lower:
+                        matching_courses.append((course_id, course))
+                        break
+        
+        # Remove duplicates
+        seen = set()
+        unique_courses = []
+        for course_id, course in matching_courses:
+            if course_id not in seen:
+                seen.add(course_id)
+                unique_courses.append((course_id, course))
+        
+        # Format matching courses as chunks
+        course_chunks = []
+        for course_id, course in unique_courses:
+            parts = []
+            for key, value in course.items():
+                if isinstance(value, list):
+                    value = ", ".join(map(str, value))
+                elif isinstance(value, dict):
+                    value = json.dumps(value)
+                parts.append(f"{key}: {value}")
+            chunk_text = "\n".join(parts)
+            course_chunks.append(chunk_text)
+        
+        return course_chunks
     
     def format_prompt(self, user_input, include_data=True, history=None):
         """
@@ -155,36 +662,74 @@ class Chatbot:
              User: {user_input}
              Assistant:"
         """
-        # Extract specific course numbers from user input and history
-        import re
-        course_numbers = set()
+        # Detect specific professors and courses mentioned
+        professor_names, course_numbers = self._detect_specific_entities(user_input, history)
         
-        # Pattern to match MIT course numbers (e.g., "6.4570", "18.06", "6.046J", "6-3")
-        # Matches: digit(s) + dot/dash + digit(s) + optional letter
-        course_pattern = r'\b(\d+[\.-]\d+[A-Z]?)\b'
+        # Update persistent context with newly detected professors
+        if professor_names and include_data and self.course_data:
+            for prof_name in professor_names:
+                if prof_name not in self._persistent_context["professors"]:
+                    # Search for courses by this professor
+                    prof_courses = self._search_courses_by_professor(prof_name)
+                    if prof_courses:
+                        self._persistent_context["professors"][prof_name] = prof_courses
+                        print(f"Found {len(prof_courses)} courses for professor: {prof_name}")
         
-        # Search in current user input
-        matches = re.findall(course_pattern, user_input)
-        course_numbers.update(matches)
-        
-        # Also search in conversation history for recently mentioned courses
-        if history:
-            for msg in history[-3:]:  # Check last 3 exchanges
-                if isinstance(msg, tuple) and len(msg) == 2:
-                    user_msg, assistant_msg = msg
-                    text = (user_msg if isinstance(user_msg, str) else str(user_msg)) + " " + (assistant_msg if isinstance(assistant_msg, str) else str(assistant_msg))
-                    matches = re.findall(course_pattern, text)
-                    course_numbers.update(matches)
-        
-        # Direct lookup: get full course data for any mentioned course numbers
-        direct_course_chunks = []
-        if include_data and self.course_data and course_numbers:
+        # Update persistent context with newly detected courses
+        if course_numbers and include_data and self.course_data:
             classes = self.course_data.get("classes") or {}
             for course_num in course_numbers:
+                if course_num not in self._persistent_context["courses"]:
+                    # Try exact match first
+                    if course_num in classes:
+                        course = classes[course_num]
+                        parts = []
+                        for key, value in course.items():
+                            if isinstance(value, list):
+                                value = ", ".join(map(str, value))
+                            elif isinstance(value, dict):
+                                value = json.dumps(value)
+                            parts.append(f"{key}: {value}")
+                        chunk_text = "\n".join(parts)
+                        self._persistent_context["courses"][course_num] = chunk_text
+                    else:
+                        # Try format variations
+                        normalized_num = course_num.replace(".", "-")
+                        for course_id, course in classes.items():
+                            if course_id.replace(".", "-") == normalized_num or course_id == normalized_num:
+                                parts = []
+                                for key, value in course.items():
+                                    if isinstance(value, list):
+                                        value = ", ".join(map(str, value))
+                                    elif isinstance(value, dict):
+                                        value = json.dumps(value)
+                                    parts.append(f"{key}: {value}")
+                                chunk_text = "\n".join(parts)
+                                self._persistent_context["courses"][course_num] = chunk_text
+                                break
+        
+        # Collect all persistent context (professors and courses from entire conversation)
+        persistent_chunks = []
+        
+        # Add all courses from persistent context
+        for course_num, course_chunk in self._persistent_context["courses"].items():
+            persistent_chunks.append(course_chunk)
+        
+        # Add all courses from professors in persistent context
+        for prof_name, prof_courses in self._persistent_context["professors"].items():
+            persistent_chunks.extend(prof_courses)
+        
+        # Also get direct lookups for currently mentioned courses (in case not in persistent yet)
+        direct_course_chunks = []
+        if include_data and self.course_data and course_numbers:
+            for course_num in course_numbers:
+                if course_num in self._persistent_context["courses"]:
+                    # Already in persistent context, skip
+                    continue
+                classes = self.course_data.get("classes") or {}
                 # Try exact match first
                 if course_num in classes:
                     course = classes[course_num]
-                    # Format course as chunk (same format as RAG chunks)
                     parts = []
                     for key, value in course.items():
                         if isinstance(value, list):
@@ -195,7 +740,7 @@ class Chatbot:
                     chunk_text = "\n".join(parts)
                     direct_course_chunks.append(chunk_text)
                 else:
-                    # Try matching with different formats (e.g., "6.4570" vs "6-4570")
+                    # Try format variations
                     normalized_num = course_num.replace(".", "-")
                     for course_id, course in classes.items():
                         if course_id.replace(".", "-") == normalized_num or course_id == normalized_num:
@@ -217,14 +762,24 @@ class Chatbot:
             if not retrieved_context.strip():
                 retrieved_context = "(No relevant course excerpts retrieved from the catalog.)"
         
-        # Combine direct lookups with RAG results, prioritizing direct lookups
-        if direct_course_chunks:
-            direct_context = "\n\n---\n\n".join(direct_course_chunks)
+        # Combine persistent context, direct lookups, and RAG results
+        all_direct_chunks = persistent_chunks + direct_course_chunks
+        
+        if all_direct_chunks:
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_chunks = []
+            for chunk in all_direct_chunks:
+                if chunk not in seen:
+                    seen.add(chunk)
+                    unique_chunks.append(chunk)
+            
+            direct_context = "\n\n---\n\n".join(unique_chunks)
             if retrieved_context:
-                # Prepend direct lookups (courses explicitly mentioned)
-                retrieved_context = f"--- Courses explicitly mentioned in query (use these) ---\n\n{direct_context}\n\n--- Other relevant courses from catalog search ---\n\n{retrieved_context}"
+                # Prepend persistent/direct lookups (professors/courses explicitly mentioned)
+                retrieved_context = f"--- Courses/Professors explicitly mentioned in conversation (ALWAYS use these) ---\n\n{direct_context}\n\n--- Other relevant courses from catalog search ---\n\n{retrieved_context}"
             else:
-                retrieved_context = f"--- Courses explicitly mentioned in query ---\n\n{direct_context}"
+                retrieved_context = f"--- Courses/Professors explicitly mentioned in conversation (ALWAYS use these) ---\n\n{direct_context}"
 
         # Load system prompt and insert retrieved chunks (step 5: build prompt)
         with open('prompts/system_prompt_draft.txt', 'r') as f:
@@ -319,7 +874,7 @@ class Chatbot:
             ]
             response = self.client.chat_completion(
                 messages=messages,
-                max_tokens=512,
+                max_tokens=1024,  # Increased for history summarization
                 temperature=0.7
             )
             if hasattr(response, 'choices') and len(response.choices) > 0:
@@ -333,54 +888,5 @@ class Chatbot:
             return conversation_history_manager_txt
 
     def get_response(self, user_input, history=None):
-        # print(f"\n--- New Message ---")
-        # print(f"User input: {user_input}")  # ADD THIS
-        # print(f"History length: {len(history) if history else 0}")  # ADD THIS
-        # print(f"History contents: {history}")  # ADD THIS
-        # First, classify if this is an MIT course question
-        if not self.is_mit_course_question(user_input, history):
-            print("Classified as: NOT an MIT course question")  # ADD THIS
-            return "I'm sorry, I can only help with questions about MIT courses, the course catalog, course selection, prerequisites, schedules, distribution requirements, and academic planning at MIT. Please ask me about MIT courses!"
-        print("Classified as: MIT course question ✓")  # ADD THIS
-        if history and len(history) > 3:
-            early_history = history[:-2]  # everything except last q&a
-            recent_history = history[-2:]  # always keep the most recent q&a
-            
-            summarized_history = self._summarize_history(early_history)
-            
-            # Keep recent history in tuple format (Gradio format)
-            # The summarized history will be added as context in format_prompt
-            history = recent_history
-            # Store summary separately to add in format_prompt if needed
-            self._history_summary = summarized_history
-            
-            # print(f"SECOND: New history length: {len(history)}")
-            # print(f"SECOND: New history: {history}")
-
-        # Format the prompt with school data
-        messages = self.format_prompt(user_input, include_data=True, history=history)
-        
-        # Generate response using the InferenceClient
-        # The InferenceClient handles the chat template formatting automatically
-        # Use chat_completion for conversational models
-        try:
-            print("Sending request to HuggingFace API...")  # ADD THIS
-            response = self.client.chat_completion(
-                messages=messages,
-                max_tokens=512,
-                temperature=0.7
-            )
-            # Extract the response text - handle different response formats
-            if hasattr(response, 'choices') and len(response.choices) > 0:
-                return response.choices[0].message.content
-            elif isinstance(response, dict) and 'choices' in response:
-                return response['choices'][0]['message']['content']
-            elif isinstance(response, dict) and 'generated_text' in response:
-                return response['generated_text']
-            else:
-                # If response format is unexpected, return string representation for debugging
-                return str(response)
-        except Exception as e:
-            # If chat_completion fails, provide a helpful error message
-            error_msg = str(e)
-            return f"Error generating response: {error_msg}. Please check your HF_TOKEN and model access."
+        bundle = self.get_response_bundle(user_input, history)
+        return bundle.get("response", "")
