@@ -39,6 +39,12 @@ class Chatbot:
         if path.exists():
             rag.ensure_index(DATA_PATH)
         
+        # Persistent context for specific professors/courses mentioned in conversation
+        self._persistent_context = {
+            "professors": {},  # {professor_name: [course_chunks]}
+            "courses": {}     # {course_number: course_chunk}
+        }
+        
     def is_mit_course_question(self, user_input, history):
         """
         Classify whether the question is related to MIT course selection.
@@ -132,7 +138,164 @@ class Chatbot:
                 'morning', 'evening', 'spring', 'fall', 'semester'
             ]
             return any(keyword.lower() in user_input.lower() for keyword in mit_course_keywords)
+    
+    def _detect_specific_entities(self, user_input, history=None):
+        """
+        Detect if a specific professor or course number is mentioned.
+        Returns tuple: (professor_names: set, course_numbers: set)
+        """
+        import re
         
+        professor_names = set()
+        course_numbers = set()
+        
+        # Pattern to match MIT course numbers
+        course_pattern = r'\b(\d+[\.-]\d+[A-Z]?)\b'
+        
+        # Extract course numbers from current input
+        matches = re.findall(course_pattern, user_input)
+        course_numbers.update(matches)
+        
+        # Extract course numbers from history
+        if history:
+            for msg in history[-5:]:  # Check last 5 exchanges
+                if isinstance(msg, tuple) and len(msg) == 2:
+                    user_msg, assistant_msg = msg
+                    text = (user_msg if isinstance(user_msg, str) else str(user_msg)) + " " + (assistant_msg if isinstance(assistant_msg, str) else str(assistant_msg))
+                    matches = re.findall(course_pattern, text)
+                    course_numbers.update(matches)
+        
+        # Detect professor names - look for capitalized name patterns
+        # Patterns that indicate a professor name
+        professor_patterns = [
+            r'(?:professor|prof|instructor|teaches?|teaching|taught by|by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',  # Full names
+            r'(?:professor|prof|instructor|teaches?|teaching|taught by|by)\s+([A-Z][a-z]+)',  # Single names
+            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s+(?:teaches?|teaching|professor|prof)',  # Name before "teaches"
+            r'what\s+(?:courses?|classes?)\s+(?:does|do|is|are)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:teach|teaching)',
+            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\'s\s+(?:courses?|classes?)',
+            r'courses?\s+(?:by|from|with)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)',
+        ]
+        
+        # Also look for standalone capitalized names (2-3 words) that might be professors
+        # This catches queries like "tell me what courses Sendhil Mullainathan is teaching"
+        standalone_name_pattern = r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b'
+        standalone_matches = re.findall(standalone_name_pattern, user_input)
+        
+        for match in standalone_matches:
+            # Filter out common false positives
+            false_positives = {'mit', 'fall', 'spring', 'summer', 'iap', 'course', 'class', 'student', 
+                             'students', 'semester', 'term', 'year', 'department', 'major', 'minor'}
+            if match.lower() not in false_positives and len(match.split()) >= 2:
+                # Check if it appears in a context suggesting it's a professor
+                context_before = user_input[:user_input.find(match)].lower()
+                context_after = user_input[user_input.find(match) + len(match):].lower()
+                if any(word in context_before or word in context_after for word in 
+                       ['teach', 'teaching', 'professor', 'prof', 'instructor', 'course', 'class']):
+                    professor_names.add(match.strip())
+        
+        for pattern in professor_patterns:
+            matches = re.findall(pattern, user_input, re.IGNORECASE)
+            for match in matches:
+                if isinstance(match, tuple):
+                    match = match[0] if match else ""
+                if match:
+                    # Filter false positives
+                    if match.lower() not in ['mit', 'fall', 'spring', 'summer', 'iap']:
+                        professor_names.add(match.strip())
+        
+        # Also check history for professor mentions
+        if history:
+            for msg in history[-5:]:
+                if isinstance(msg, tuple) and len(msg) == 2:
+                    user_msg, assistant_msg = msg
+                    text = (user_msg if isinstance(user_msg, str) else str(user_msg)) + " " + (assistant_msg if isinstance(assistant_msg, str) else str(assistant_msg))
+                    for pattern in professor_patterns:
+                        matches = re.findall(pattern, text, re.IGNORECASE)
+                        for match in matches:
+                            if isinstance(match, tuple):
+                                match = match[0] if match else ""
+                            if match and match.lower() not in ['mit', 'fall', 'spring', 'summer', 'iap']:
+                                professor_names.add(match.strip())
+        
+        return professor_names, course_numbers
+    
+    def _search_courses_by_professor(self, professor_name):
+        """
+        Search all courses for a specific professor name in inCharge field.
+        Returns list of course chunks.
+        """
+        if not self.course_data:
+            return []
+        
+        classes = self.course_data.get("classes") or {}
+        matching_courses = []
+        
+        # Normalize professor name for matching (handle variations)
+        prof_name_lower = professor_name.lower().strip()
+        prof_parts = prof_name_lower.split()
+        
+        for course_id, course in classes.items():
+            in_charge = course.get("inCharge", "")
+            if not in_charge:
+                continue
+            
+            # Check if professor name appears in inCharge field
+            in_charge_lower = in_charge.lower()
+            
+            # Try different matching strategies
+            # 1. Full name match (e.g., "sendhil mullainathan" in "Sendhil Mullainathan")
+            if prof_name_lower in in_charge_lower:
+                matching_courses.append((course_id, course))
+                continue
+            
+            # 2. Last name match (common format: "J. Smith" or "Smith, J." or "Smith")
+            if len(prof_parts) > 0:
+                last_name = prof_parts[-1]
+                # Check for last name with various formats
+                # "J. Smith", "Smith, J.", "Smith", "Smith J.", etc.
+                last_name_patterns = [
+                    f". {last_name}",  # "J. Smith"
+                    f"{last_name},",   # "Smith, J."
+                    f"{last_name} ",   # "Smith " (followed by space)
+                    f" {last_name}",  # " Smith" (preceded by space)
+                    f"{last_name}.",  # "Smith."
+                ]
+                
+                for pattern in last_name_patterns:
+                    if pattern in in_charge_lower:
+                        matching_courses.append((course_id, course))
+                        break
+                
+                # Also try first initial + last name (e.g., "S. Mullainathan")
+                if len(prof_parts) >= 2:
+                    first_initial = prof_parts[0][0] if prof_parts[0] else ""
+                    last_name = prof_parts[-1]
+                    if first_initial and f"{first_initial}. {last_name}" in in_charge_lower:
+                        matching_courses.append((course_id, course))
+                        break
+        
+        # Remove duplicates
+        seen = set()
+        unique_courses = []
+        for course_id, course in matching_courses:
+            if course_id not in seen:
+                seen.add(course_id)
+                unique_courses.append((course_id, course))
+        
+        # Format matching courses as chunks
+        course_chunks = []
+        for course_id, course in unique_courses:
+            parts = []
+            for key, value in course.items():
+                if isinstance(value, list):
+                    value = ", ".join(map(str, value))
+                elif isinstance(value, dict):
+                    value = json.dumps(value)
+                parts.append(f"{key}: {value}")
+            chunk_text = "\n".join(parts)
+            course_chunks.append(chunk_text)
+        
+        return course_chunks
     
     def format_prompt(self, user_input, include_data=True, history=None):
         """
@@ -155,36 +318,74 @@ class Chatbot:
              User: {user_input}
              Assistant:"
         """
-        # Extract specific course numbers from user input and history
-        import re
-        course_numbers = set()
+        # Detect specific professors and courses mentioned
+        professor_names, course_numbers = self._detect_specific_entities(user_input, history)
         
-        # Pattern to match MIT course numbers (e.g., "6.4570", "18.06", "6.046J", "6-3")
-        # Matches: digit(s) + dot/dash + digit(s) + optional letter
-        course_pattern = r'\b(\d+[\.-]\d+[A-Z]?)\b'
+        # Update persistent context with newly detected professors
+        if professor_names and include_data and self.course_data:
+            for prof_name in professor_names:
+                if prof_name not in self._persistent_context["professors"]:
+                    # Search for courses by this professor
+                    prof_courses = self._search_courses_by_professor(prof_name)
+                    if prof_courses:
+                        self._persistent_context["professors"][prof_name] = prof_courses
+                        print(f"Found {len(prof_courses)} courses for professor: {prof_name}")
         
-        # Search in current user input
-        matches = re.findall(course_pattern, user_input)
-        course_numbers.update(matches)
-        
-        # Also search in conversation history for recently mentioned courses
-        if history:
-            for msg in history[-3:]:  # Check last 3 exchanges
-                if isinstance(msg, tuple) and len(msg) == 2:
-                    user_msg, assistant_msg = msg
-                    text = (user_msg if isinstance(user_msg, str) else str(user_msg)) + " " + (assistant_msg if isinstance(assistant_msg, str) else str(assistant_msg))
-                    matches = re.findall(course_pattern, text)
-                    course_numbers.update(matches)
-        
-        # Direct lookup: get full course data for any mentioned course numbers
-        direct_course_chunks = []
-        if include_data and self.course_data and course_numbers:
+        # Update persistent context with newly detected courses
+        if course_numbers and include_data and self.course_data:
             classes = self.course_data.get("classes") or {}
             for course_num in course_numbers:
+                if course_num not in self._persistent_context["courses"]:
+                    # Try exact match first
+                    if course_num in classes:
+                        course = classes[course_num]
+                        parts = []
+                        for key, value in course.items():
+                            if isinstance(value, list):
+                                value = ", ".join(map(str, value))
+                            elif isinstance(value, dict):
+                                value = json.dumps(value)
+                            parts.append(f"{key}: {value}")
+                        chunk_text = "\n".join(parts)
+                        self._persistent_context["courses"][course_num] = chunk_text
+                    else:
+                        # Try format variations
+                        normalized_num = course_num.replace(".", "-")
+                        for course_id, course in classes.items():
+                            if course_id.replace(".", "-") == normalized_num or course_id == normalized_num:
+                                parts = []
+                                for key, value in course.items():
+                                    if isinstance(value, list):
+                                        value = ", ".join(map(str, value))
+                                    elif isinstance(value, dict):
+                                        value = json.dumps(value)
+                                    parts.append(f"{key}: {value}")
+                                chunk_text = "\n".join(parts)
+                                self._persistent_context["courses"][course_num] = chunk_text
+                                break
+        
+        # Collect all persistent context (professors and courses from entire conversation)
+        persistent_chunks = []
+        
+        # Add all courses from persistent context
+        for course_num, course_chunk in self._persistent_context["courses"].items():
+            persistent_chunks.append(course_chunk)
+        
+        # Add all courses from professors in persistent context
+        for prof_name, prof_courses in self._persistent_context["professors"].items():
+            persistent_chunks.extend(prof_courses)
+        
+        # Also get direct lookups for currently mentioned courses (in case not in persistent yet)
+        direct_course_chunks = []
+        if include_data and self.course_data and course_numbers:
+            for course_num in course_numbers:
+                if course_num in self._persistent_context["courses"]:
+                    # Already in persistent context, skip
+                    continue
+                classes = self.course_data.get("classes") or {}
                 # Try exact match first
                 if course_num in classes:
                     course = classes[course_num]
-                    # Format course as chunk (same format as RAG chunks)
                     parts = []
                     for key, value in course.items():
                         if isinstance(value, list):
@@ -195,7 +396,7 @@ class Chatbot:
                     chunk_text = "\n".join(parts)
                     direct_course_chunks.append(chunk_text)
                 else:
-                    # Try matching with different formats (e.g., "6.4570" vs "6-4570")
+                    # Try format variations
                     normalized_num = course_num.replace(".", "-")
                     for course_id, course in classes.items():
                         if course_id.replace(".", "-") == normalized_num or course_id == normalized_num:
@@ -217,14 +418,24 @@ class Chatbot:
             if not retrieved_context.strip():
                 retrieved_context = "(No relevant course excerpts retrieved from the catalog.)"
         
-        # Combine direct lookups with RAG results, prioritizing direct lookups
-        if direct_course_chunks:
-            direct_context = "\n\n---\n\n".join(direct_course_chunks)
+        # Combine persistent context, direct lookups, and RAG results
+        all_direct_chunks = persistent_chunks + direct_course_chunks
+        
+        if all_direct_chunks:
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_chunks = []
+            for chunk in all_direct_chunks:
+                if chunk not in seen:
+                    seen.add(chunk)
+                    unique_chunks.append(chunk)
+            
+            direct_context = "\n\n---\n\n".join(unique_chunks)
             if retrieved_context:
-                # Prepend direct lookups (courses explicitly mentioned)
-                retrieved_context = f"--- Courses explicitly mentioned in query (use these) ---\n\n{direct_context}\n\n--- Other relevant courses from catalog search ---\n\n{retrieved_context}"
+                # Prepend persistent/direct lookups (professors/courses explicitly mentioned)
+                retrieved_context = f"--- Courses/Professors explicitly mentioned in conversation (ALWAYS use these) ---\n\n{direct_context}\n\n--- Other relevant courses from catalog search ---\n\n{retrieved_context}"
             else:
-                retrieved_context = f"--- Courses explicitly mentioned in query ---\n\n{direct_context}"
+                retrieved_context = f"--- Courses/Professors explicitly mentioned in conversation (ALWAYS use these) ---\n\n{direct_context}"
 
         # Load system prompt and insert retrieved chunks (step 5: build prompt)
         with open('prompts/system_prompt_draft.txt', 'r') as f:
