@@ -229,53 +229,62 @@ def create_chatbot():
         margin-right: auto !important;
     }
 
-    /* Only the bubble should be visible, not the full-width row */
+    /* Keep outer rows invisible and use them only for alignment */
+    .user-message, .assistant-message,
+    .message.user, .message.assistant,
     .message.user > div, .message.assistant > div,
-    .message.user [class*="message-content"], .message.assistant [class*="message-content"],
-    .message.user [class*="bubble"], .message.assistant [class*="bubble"],
-    .message.user .message-content, .message.assistant .message-content,
-    .message.user .bubble, .message.assistant .bubble {
+    [class*="message-row"], [class*="message-wrap"] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    .message.user [class*="message-wrap"],
+    .message.assistant [class*="message-wrap"],
+    .message.user .message-wrap,
+    .message.assistant .message-wrap {
+        width: 100% !important;
+        display: flex !important;
+    }
+
+    .message.user [class*="message-wrap"],
+    .message.user .message-wrap {
+        justify-content: flex-end !important;
+    }
+
+    .message.assistant [class*="message-wrap"],
+    .message.assistant .message-wrap {
+        justify-content: flex-start !important;
+    }
+
+    /* Style only the actual visible bubble */
+    .message.user .message-content,
+    .message.user [class*="message-content"],
+    .message.assistant .message-content,
+    .message.assistant [class*="message-content"] {
         display: inline-block !important;
-        width: fit-content !important;
-        max-width: 54% !important;
-        border-radius: 16px !important;
+        width: auto !important;
+        max-width: 44% !important;
         padding: 13px 16px !important;
+        border-radius: 16px !important;
         box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
         overflow-wrap: anywhere !important;
         word-break: break-word !important;
         white-space: pre-wrap !important;
     }
 
-    /* User messages - keep on the right with a subtler dark bubble */
-    .message.user > div,
-    .message.user [class*="message-content"],
-    .message.user [class*="bubble"],
     .message.user .message-content,
-    .message.user .bubble {
+    .message.user [class*="message-content"] {
         background: linear-gradient(135deg, #6d5efc 0%, #5a4be7 100%) !important;
         color: white !important;
         border: none !important;
     }
     
-    /* Assistant messages - keep on the left with a clean neutral bubble */
-    .message.assistant > div,
-    .message.assistant [class*="message-content"],
-    .message.assistant [class*="bubble"],
     .message.assistant .message-content,
-    .message.assistant .bubble {
-        background: #ffffff !important;
+    .message.assistant [class*="message-content"] {
+        background: #eef1f5 !important;
+        color: #1f2937 !important;
         border: none !important;
-        color: #1a1a1a !important;
-    }
-
-    /* Make row/background containers invisible */
-    .user-message, .assistant-message,
-    .message.user, .message.assistant,
-    .message.user > div:first-child, .message.assistant > div:first-child,
-    [class*="message-row"], [class*="message-wrap"] {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
     }
 
     .message p, .message div, .message span {
@@ -284,40 +293,6 @@ def create_chatbot():
         white-space: pre-wrap !important;
     }
 
-    .typing-indicator {
-        display: inline-flex !important;
-        align-items: center !important;
-        gap: 6px !important;
-        min-width: 34px !important;
-    }
-
-    .typing-indicator span {
-        width: 7px !important;
-        height: 7px !important;
-        border-radius: 999px !important;
-        background: #9ca3af !important;
-        display: inline-block !important;
-        animation: typing-bounce 1.15s infinite ease-in-out !important;
-    }
-
-    .typing-indicator span:nth-child(2) {
-        animation-delay: 0.18s !important;
-    }
-
-    .typing-indicator span:nth-child(3) {
-        animation-delay: 0.36s !important;
-    }
-
-    @keyframes typing-bounce {
-        0%, 80%, 100% {
-            opacity: 0.35;
-            transform: translateY(0);
-        }
-        40% {
-            opacity: 1;
-            transform: translateY(-3px);
-        }
-    }
     
     /* Input area styling - more prominent */
     textarea, input[type="text"], .input-text {
@@ -708,18 +683,13 @@ def create_chatbot():
                 all_courses_state = gr.State([])
                 all_professors_state = gr.State([])
                 entity_summaries_state = gr.State({})
-                typing_placeholder = (
-                    "<span class='typing-indicator' aria-label='Assistant is typing'>"
-                    "<span></span><span></span><span></span>"
-                    "</span>"
-                )
                 pending_message_state = gr.State("")
                 
                 def add_user_message(message, history):
                     history = history or []
                     if not message or not message.strip():
                         return history, gr.update(value=message or "", interactive=True), gr.update(interactive=True), ""
-                    new_history = history + [(message, typing_placeholder)]
+                    new_history = history + [(message, None)]
                     return new_history, gr.update(value="", interactive=False), gr.update(interactive=False), message
 
                 # Process chat and update entities after typing placeholder is shown
