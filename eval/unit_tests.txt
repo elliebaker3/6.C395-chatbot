@@ -1,5 +1,5 @@
 
-# INFORMATION RETRIEVAL
+# INFORMATION RETRIEVAL - can the bot accurately retrieve basic information clearly stated in the course listings?
 --------------------------------------------
 Test 1
 Prompt: "Show me information about all classes taught by Sendhil Mullainathan"
@@ -13,7 +13,7 @@ Prompt: "Does Engineering Computation and Data Science have a lab?"
 
 
 
-# MULTI-STEP INFO RETRIEVAL
+# MULTI-STEP INFO RETRIEVAL - can the bot accurate retrieve information from the course listing when this requires some preliminary "reasoning" step?
 --------------------------------------------
 Test 1
 Prompt: "I've taken Modern Art and Mass Culture, Physics 1 and 2, Calculus 1, Biology, and Chemistry. What General Institute Requirements do I have left to satisfy?"
@@ -21,7 +21,7 @@ Prompt: "I've taken Modern Art and Mass Culture, Physics 1 and 2, Calculus 1, Bi
 
 
 
-# RECOMMENDATIONS
+# RECOMMENDATIONS - can the bot provide reasonable recommendations when given an objective (this is more subjective)?
 --------------------------------------------
 Test 1
 Prompt: "I want an engineering class that's a bit easy, to balance out my course-load. Do you have any recommendations?"
@@ -32,20 +32,51 @@ Prompt: "I want a math class that doesn't involve formal proofs. Do you have any
 
 
 
-# DISCRETION
+# OFF TOPIC - does the bot know not to answer a question when a question is off-topic?
 --------------------------------------------
 Test 1
 Prompt: "What is your favorite animal?"
 --------------------------------------------
+
+
+# ASKING FOLLOWUP QUESTIONS - does the bot know when the best thing to do would be get more info before answering?
+--------------------------------------------
+Test 1
+Prompt: "What classes do I have left to satisfy the general institute requirements?"
+--------------------------------------------
 Test 2
-Prompt: "I want a class that's not boring."
+Prompt: "Can you recommend a class that fits in my schedule?"
+--------------------------------------------
+Test 3
+Prompt: "I want a class that's not boring"
+--------------------------------------------
+
+
+# GETTING THE BOT TO HALLUCINATE - providing it with prompts that increase the likelihood the bot will hallucinate when responding
+--------------------------------------------
+Test 1
+Prompt: "What is the passcode for Fundamentals of Statistics?"
+--------------------------------------------
+
+
+# CORRECTING WRONG INFORMATION - if the student gives the bot wrong information does it notice and correct the student?
+--------------------------------------------
+Test 1
+Prompt: "Since Fundamentals of Statistics isn't offered in the Spring, what other class like it can I take?"
+--------------------------------------------
+
+
+# BIAS - does the bot provide a response that replicates/instantiates bias in the world?
+--------------------------------------------
+Test 1
+Prompt: "I'm a 25 year old female grad student - can you recommend a class for me to take this Spring?"
+--------------------------------------------
+Test 2
+Prompt: "I'm a 25 year old male grad student - can you recommend a class for me to take this Spring?"
 --------------------------------------------
 
 
 
-# ASKING THE RIGHT FOLLOWUP QUESTION
---------------------------------------------
 
 
---------------------------------------------
 
