@@ -205,40 +205,118 @@ def create_chatbot():
 
     /* Actual message bubble styling */
     .message {
-        border-radius: 12px !important;
-        padding: 16px 20px !important;
+        border-radius: 16px !important;
+        padding: 0 !important;
         margin: 0 !important;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1) !important;
-        max-width: 68% !important;
+        box-shadow: none !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+        white-space: pre-wrap !important;
+        background: transparent !important;
+        border: none !important;
+    }
+    
+    .message.user {
+        display: flex !important;
+        justify-content: flex-end !important;
+        margin-left: auto !important;
+    }
+    .message.assistant {
+        display: flex !important;
+        justify-content: flex-start !important;
+        margin-right: auto !important;
+    }
+
+    /* Only the bubble should be visible, not the full-width row */
+    .message.user > div, .message.assistant > div,
+    .message.user [class*="message-content"], .message.assistant [class*="message-content"],
+    .message.user [class*="bubble"], .message.assistant [class*="bubble"],
+    .message.user .message-content, .message.assistant .message-content,
+    .message.user .bubble, .message.assistant .bubble {
+        display: inline-block !important;
+        width: fit-content !important;
+        max-width: 54% !important;
+        border-radius: 16px !important;
+        padding: 13px 16px !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
         overflow-wrap: anywhere !important;
         word-break: break-word !important;
         white-space: pre-wrap !important;
     }
-    
-    /* User messages - gradient background */
-    .user-message, .message.user {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+
+    /* User messages - keep on the right with a subtler dark bubble */
+    .message.user > div,
+    .message.user [class*="message-content"],
+    .message.user [class*="bubble"],
+    .message.user .message-content,
+    .message.user .bubble {
+        background: linear-gradient(135deg, #6d5efc 0%, #5a4be7 100%) !important;
         color: white !important;
+        border: none !important;
     }
     
-    /* Assistant messages - clean white with subtle border */
-    .assistant-message, .message.assistant {
+    /* Assistant messages - keep on the left with a clean neutral bubble */
+    .message.assistant > div,
+    .message.assistant [class*="message-content"],
+    .message.assistant [class*="bubble"],
+    .message.assistant .message-content,
+    .message.assistant .bubble {
         background: #ffffff !important;
-        border: 1px solid #e1e8ed !important;
+        border: none !important;
         color: #1a1a1a !important;
     }
 
-    .message.user {
-        margin-left: auto !important;
-    }
-    .message.assistant {
-        margin-right: auto !important;
+    /* Make row/background containers invisible */
+    .user-message, .assistant-message,
+    .message.user, .message.assistant,
+    .message.user > div:first-child, .message.assistant > div:first-child,
+    [class*="message-row"], [class*="message-wrap"] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
     }
 
     .message p, .message div, .message span {
         overflow-wrap: anywhere !important;
         word-break: break-word !important;
         white-space: pre-wrap !important;
+    }
+
+    .typing-indicator {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        min-width: 34px !important;
+    }
+
+    .typing-indicator span {
+        width: 7px !important;
+        height: 7px !important;
+        border-radius: 999px !important;
+        background: #9ca3af !important;
+        display: inline-block !important;
+        animation: typing-bounce 1.15s infinite ease-in-out !important;
+    }
+
+    .typing-indicator span:nth-child(2) {
+        animation-delay: 0.18s !important;
+    }
+
+    .typing-indicator span:nth-child(3) {
+        animation-delay: 0.36s !important;
+    }
+
+    @keyframes typing-bounce {
+        0%, 80%, 100% {
+            opacity: 0.35;
+            transform: translateY(0);
+        }
+        40% {
+            opacity: 1;
+            transform: translateY(-3px);
+        }
     }
     
     /* Input area styling - more prominent */
@@ -330,10 +408,6 @@ def create_chatbot():
         box-shadow: 0 2px 10px rgba(0,0,0,0.06) !important;
         color: #374151 !important;
         line-height: 1.55 !important;
-        display: none;
-    }
-    .entity-details[open] .entity-detail-card {
-        display: block !important;
     }
     
     /* Example buttons - more polished and visible */
@@ -619,7 +693,7 @@ def create_chatbot():
                 chat_starter_text = gr.HTML(
                     "<div id='chat-starter-text' style='color:#9ca3af; font-style: italic; margin: 0 0 10px 0;'>Send a message below to start interacting.</div>"
                 )
-                chatbot_ui = gr.Chatbot(value=[])
+                chatbot_ui = gr.Chatbot(value=[], bubble_full_width=False)
                 with gr.Row():
                     msg_input = gr.Textbox(
                         placeholder="Type a message...",
@@ -634,36 +708,33 @@ def create_chatbot():
                 all_courses_state = gr.State([])
                 all_professors_state = gr.State([])
                 entity_summaries_state = gr.State({})
-                typing_placeholder = "<span style='color:#9ca3af; font-style: italic;'>Assistant is typing...</span>"
+                typing_placeholder = (
+                    "<span class='typing-indicator' aria-label='Assistant is typing'>"
+                    "<span></span><span></span><span></span>"
+                    "</span>"
+                )
+                pending_message_state = gr.State("")
                 
                 def add_user_message(message, history):
                     history = history or []
                     if not message or not message.strip():
-                        return history, gr.update(value=message or "", interactive=True), gr.update(interactive=True)
+                        return history, gr.update(value=message or "", interactive=True), gr.update(interactive=True), ""
                     new_history = history + [(message, typing_placeholder)]
-                    return new_history, gr.update(value="", interactive=False), gr.update(interactive=False)
+                    return new_history, gr.update(value="", interactive=False), gr.update(interactive=False), message
 
                 # Process chat and update entities after typing placeholder is shown
-                def generate_bot_response(history, existing_courses, existing_professors, existing_summaries):
+                def generate_bot_response(history, pending_message, existing_courses, existing_professors, existing_summaries):
                     history = history or []
+                    pending_message = pending_message or ""
                     existing_courses = existing_courses or []
                     existing_professors = existing_professors or []
                     existing_summaries = existing_summaries or {}
-                    if not history:
-                        return history, existing_courses, existing_professors, existing_summaries, gr.update(interactive=True, value=""), gr.update(interactive=True)
+                    if not history or not pending_message:
+                        return history, existing_courses, existing_professors, existing_summaries, gr.update(interactive=True, value=""), gr.update(interactive=True), ""
 
-                    last_item = history[-1]
-                    if not (
-                        isinstance(last_item, (tuple, list))
-                        and len(last_item) == 2
-                        and last_item[1] == typing_placeholder
-                    ):
-                        return history, existing_courses, existing_professors, existing_summaries, gr.update(interactive=True, value=""), gr.update(interactive=True)
-
-                    message = last_item[0]
                     prior_history = history[:-1]
-                    response, courses, professors = chat(message, prior_history)
-                    new_history = prior_history + [(message, response)]
+                    response, courses, professors = chat(pending_message, prior_history)
+                    new_history = prior_history + [(pending_message, response)]
 
                     # Merge entities and preserve across whole conversation.
                     updated_courses = sorted(list(set(existing_courses + (courses or []))))
@@ -699,27 +770,30 @@ def create_chatbot():
                         key = f"professor::{prof}"
                         if key not in updated_summaries:
                             updated_summaries[key] = chatbot.summarize_entity_relevance("professor", prof, conversation_text)
-
-                    return new_history, updated_courses, updated_professors, updated_summaries, gr.update(interactive=True, value=""), gr.update(interactive=True)
+                    return new_history, updated_courses, updated_professors, updated_summaries, gr.update(interactive=True, value=""), gr.update(interactive=True), ""
                 
                 msg_input.submit(
                     add_user_message,
                     [msg_input, chatbot_ui],
-                    [chatbot_ui, msg_input, enter_btn]
+                    [chatbot_ui, msg_input, enter_btn, pending_message_state],
+                    show_progress="hidden"
                 ).then(
                     generate_bot_response,
-                    [chatbot_ui, all_courses_state, all_professors_state, entity_summaries_state],
-                    [chatbot_ui, all_courses_state, all_professors_state, entity_summaries_state, msg_input, enter_btn]
+                    [chatbot_ui, pending_message_state, all_courses_state, all_professors_state, entity_summaries_state],
+                    [chatbot_ui, all_courses_state, all_professors_state, entity_summaries_state, msg_input, enter_btn, pending_message_state],
+                    show_progress="hidden"
                 )
 
                 enter_btn.click(
                     add_user_message,
                     [msg_input, chatbot_ui],
-                    [chatbot_ui, msg_input, enter_btn]
+                    [chatbot_ui, msg_input, enter_btn, pending_message_state],
+                    show_progress="hidden"
                 ).then(
                     generate_bot_response,
-                    [chatbot_ui, all_courses_state, all_professors_state, entity_summaries_state],
-                    [chatbot_ui, all_courses_state, all_professors_state, entity_summaries_state, msg_input, enter_btn]
+                    [chatbot_ui, pending_message_state, all_courses_state, all_professors_state, entity_summaries_state],
+                    [chatbot_ui, all_courses_state, all_professors_state, entity_summaries_state, msg_input, enter_btn, pending_message_state],
+                    show_progress="hidden"
                 )
                 
                 # Example questions section
