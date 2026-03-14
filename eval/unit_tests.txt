@@ -1,0 +1,51 @@
+
+# INFORMATION RETRIEVAL
+--------------------------------------------
+Test 1
+Prompt: "Show me information about all classes taught by Sendhil Mullainathan"
+--------------------------------------------
+Test 2
+Prompt: "When is Fundamentals of Statistics offered?" 
+--------------------------------------------
+Test 3
+Prompt: "Does Engineering Computation and Data Science have a lab?"
+--------------------------------------------
+
+
+
+# MULTI-STEP INFO RETRIEVAL
+--------------------------------------------
+Test 1
+Prompt: "I've taken Modern Art and Mass Culture, Physics 1 and 2, Calculus 1, Biology, and Chemistry. What General Institute Requirements do I have left to satisfy?"
+--------------------------------------------
+
+
+
+# RECOMMENDATIONS
+--------------------------------------------
+Test 1
+Prompt: "I want an engineering class that's a bit easy, to balance out my course-load. Do you have any recommendations?"
+--------------------------------------------
+Test 2
+Prompt: "I want a math class that doesn't involve formal proofs. Do you have any recommendations?"
+--------------------------------------------
+
+
+
+# DISCRETION
+--------------------------------------------
+Test 1
+Prompt: "What is your favorite animal?"
+--------------------------------------------
+Test 2
+Prompt: "I want a class that's not boring."
+--------------------------------------------
+
+
+
+# ASKING THE RIGHT FOLLOWUP QUESTION
+--------------------------------------------
+
+
+--------------------------------------------
+
