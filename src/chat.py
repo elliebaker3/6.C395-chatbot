@@ -45,6 +45,65 @@ class Chatbot:
             "professors": {},  # {professor_name: [course_chunks]}
             "courses": {}     # {course_number: course_chunk}
         }
+
+    def _is_generic_professor_label(self, value):
+        """
+        Filter out role labels that are not actual professor names.
+        """
+        text = (value or "").strip()
+        if not text:
+            return True
+
+        normalized = re.sub(r"[^a-z\s]", "", text.lower()).strip()
+        generic_patterns = [
+            r"^professor$",
+            r"^professors$",
+            r"^prof$",
+            r"^instructor$",
+            r"^instructors$",
+            r"^teacher$",
+            r"^teachers$",
+            r"^lecturer$",
+            r"^lecturers$",
+            r"^faculty$",
+            r"^staff$",
+            r"^teaching staff$",
+            r"^instructional staff$",
+            r"^course staff$",
+            r"^the professor$",
+            r"^the instructor$",
+            r"^the lecturer$",
+            r"^unknown instructor$",
+            r"^unknown professor$",
+            r"^professor name$",
+            r"^instructor name$",
+        ]
+        return any(re.match(pattern, normalized) for pattern in generic_patterns)
+
+    def _looks_like_professor_name(self, value):
+        """
+        Accept only strings that plausibly look like a person's name.
+        """
+        text = (value or "").strip()
+        if not text:
+            return False
+        if self._is_generic_professor_label(text):
+            return False
+        if "?" in text or ":" in text or "\n" in text:
+            return False
+
+        normalized = re.sub(r"\s+", " ", text).strip()
+        if len(normalized) > 60:
+            return False
+
+        # Allow names like "Sendhil Mullainathan", "S. Mullainathan", "J. Doyle"
+        if re.fullmatch(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}", normalized):
+            return True
+        if re.fullmatch(r"[A-Z]\.\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}", normalized):
+            return True
+        if re.fullmatch(r"[A-Z][a-z]+\s+[A-Z]\.\s*[A-Z][a-z]+", normalized):
+            return True
+        return False
         
     def is_mit_course_question(self, user_input, history):
         """
@@ -191,7 +250,7 @@ class Chatbot:
                 context_before = user_input[:user_input.find(match)].lower()
                 context_after = user_input[user_input.find(match) + len(match):].lower()
                 if any(word in context_before or word in context_after for word in 
-                       ['teach', 'teaching', 'professor', 'prof', 'instructor', 'course', 'class']):
+                       ['teach', 'teaching', 'professor', 'prof', 'instructor', 'course', 'class']) and not self._is_generic_professor_label(match):
                     professor_names.add(match.strip())
         
         for pattern in professor_patterns:
@@ -201,7 +260,7 @@ class Chatbot:
                     match = match[0] if match else ""
                 if match:
                     # Filter false positives
-                    if match.lower() not in ['mit', 'fall', 'spring', 'summer', 'iap']:
+                    if match.lower() not in ['mit', 'fall', 'spring', 'summer', 'iap'] and not self._is_generic_professor_label(match):
                         professor_names.add(match.strip())
         
         # Also check history for professor mentions
@@ -215,7 +274,7 @@ class Chatbot:
                         for match in matches:
                             if isinstance(match, tuple):
                                 match = match[0] if match else ""
-                            if match and match.lower() not in ['mit', 'fall', 'spring', 'summer', 'iap']:
+                            if match and match.lower() not in ['mit', 'fall', 'spring', 'summer', 'iap'] and not self._is_generic_professor_label(match):
                                 professor_names.add(match.strip())
         
         return professor_names, course_numbers
@@ -275,19 +334,21 @@ class Chatbot:
             professors = parsed.get("professors", []) if isinstance(parsed, dict) else []
 
             # Normalize and dedupe while preserving order.
-            def _clean_list(items):
+            def _clean_list(items, entity_type=None):
                 seen = set()
                 cleaned = []
                 for item in items or []:
                     text = str(item).strip()
+                    if entity_type == "professor" and self._is_generic_professor_label(text):
+                        continue
                     if text and text not in seen:
                         seen.add(text)
                         cleaned.append(text)
                 return cleaned
 
             return {
-                "courses": _clean_list(courses),
-                "professors": _clean_list(professors),
+                "courses": _clean_list(courses, entity_type="course"),
+                "professors": _clean_list(professors, entity_type="professor"),
             }
         except Exception:
             # Fallback to deterministic extraction from final response only.
@@ -373,7 +434,7 @@ class Chatbot:
             ]
             return any(re.match(pattern, text) for pattern in none_patterns)
 
-        def _split_entities(value):
+        def _split_entities(value, entity_type=None):
             if not value:
                 return []
             if _is_none_like(value):
@@ -384,6 +445,8 @@ class Chatbot:
             for item in items:
                 if not item or _is_none_like(item):
                     continue
+                if entity_type == "professor" and not self._looks_like_professor_name(item):
+                    continue
                 if item not in seen:
                     seen.add(item)
                     out.append(item)
@@ -391,8 +454,8 @@ class Chatbot:
 
         return {
             "response": response_text,
-            "courses": _split_entities(courses_raw),
-            "professors": _split_entities(profs_raw),
+            "courses": _split_entities(courses_raw, entity_type="course"),
+            "professors": _split_entities(profs_raw, entity_type="professor"),
             "raw": raw_text,
         }
 
@@ -517,7 +580,9 @@ class Chatbot:
         """
         existing_names = [name for name in (existing_names or []) if name]
         candidate_name = (candidate_name or "").strip()
-        if not candidate_name or not existing_names:
+        if not candidate_name or self._is_generic_professor_label(candidate_name):
+            return ""
+        if not existing_names:
             return candidate_name
 
         try:

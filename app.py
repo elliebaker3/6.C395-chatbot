@@ -264,7 +264,7 @@ def create_chatbot():
     .message.assistant [class*="message-content"] {
         display: inline-block !important;
         width: auto !important;
-        max-width: 44% !important;
+        max-width: 70% !important;
         padding: 13px 16px !important;
         border-radius: 16px !important;
         box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
@@ -275,7 +275,7 @@ def create_chatbot():
 
     .message.user .message-content,
     .message.user [class*="message-content"] {
-        background: linear-gradient(135deg, #6d5efc 0%, #5a4be7 100%) !important;
+        background: linear-gradient(135deg, #7b6cff 0%, #6757ee 100%) !important;
         color: white !important;
         border: none !important;
     }
@@ -285,6 +285,63 @@ def create_chatbot():
         background: #eef1f5 !important;
         color: #1f2937 !important;
         border: none !important;
+    }
+
+    /* Directly target Gradio's actual visible chat bubble wrappers */
+    .flex-wrap.user,
+    .chatbot .flex-wrap.user,
+    .chatbot-container .flex-wrap.user,
+    [class*="chatbot"] .flex-wrap.user {
+        width: fit-content !important;
+        min-width: 0 !important;
+        max-width: 70% !important;
+        flex: 0 0 auto !important;
+        display: inline-flex !important;
+        align-self: flex-end !important;
+        margin-left: auto !important;
+        margin-right: 18px !important;
+        padding: 13px 16px !important;
+        border-radius: 16px !important;
+        background: linear-gradient(135deg, #7b6cff 0%, #6757ee 100%) !important;
+        color: white !important;
+        border: none !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
+    }
+
+    .flex-wrap.bot,
+    .flex-wrap.assistant,
+    .chatbot .flex-wrap.bot,
+    .chatbot .flex-wrap.assistant,
+    .chatbot-container .flex-wrap.bot,
+    .chatbot-container .flex-wrap.assistant,
+    [class*="chatbot"] .flex-wrap.bot,
+    [class*="chatbot"] .flex-wrap.assistant {
+        width: fit-content !important;
+        min-width: 0 !important;
+        max-width: 70% !important;
+        flex: 0 0 auto !important;
+        display: inline-flex !important;
+        align-self: flex-start !important;
+        margin-left: 18px !important;
+        margin-right: auto !important;
+        padding: 13px 16px !important;
+        border-radius: 16px !important;
+        background: #eef1f5 !important;
+        color: #1f2937 !important;
+        border: none !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
+    }
+
+    .flex-wrap.user p,
+    .flex-wrap.bot p,
+    .flex-wrap.assistant p,
+    .chatbot .flex-wrap.user p,
+    .chatbot .flex-wrap.bot p,
+    .chatbot .flex-wrap.assistant p,
+    [class*="chatbot"] .flex-wrap.user p,
+    [class*="chatbot"] .flex-wrap.bot p,
+    [class*="chatbot"] .flex-wrap.assistant p {
+        margin: 0 !important;
     }
 
     .message p, .message div, .message span {
@@ -483,8 +540,7 @@ def create_chatbot():
     .gradio-container > .container,
     [class*="container"]:not([class*="chatbot"]),
     .gradio-container .wrap,
-    .gradio-container .wrap-inner,
-    .gradio-container [class*="wrap"] {
+    .gradio-container .wrap-inner {
         max-width: 100% !important;
         width: 100% !important;
     }
@@ -711,7 +767,7 @@ def create_chatbot():
                     updated_professors = list(existing_professors)
                     for prof in (professors or []):
                         canonical = chatbot.dedupe_professor_name(prof, updated_professors)
-                        if canonical not in updated_professors:
+                        if canonical and canonical not in updated_professors:
                             updated_professors.append(canonical)
                     updated_professors = sorted(set(updated_professors))
 
@@ -734,7 +790,7 @@ def create_chatbot():
                     new_professors = []
                     for p in (professors or []):
                         canonical = chatbot.dedupe_professor_name(p, existing_professors + new_professors)
-                        if canonical not in existing_professors and canonical not in new_professors:
+                        if canonical and canonical not in existing_professors and canonical not in new_professors:
                             new_professors.append(canonical)
                     for prof in new_professors:
                         key = f"professor::{prof}"
