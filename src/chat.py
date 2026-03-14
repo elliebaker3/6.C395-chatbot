@@ -530,7 +530,7 @@ class Chatbot:
             ]
             response = self.client.chat_completion(
                 messages=messages,
-                max_tokens=512,
+                max_tokens=1024,  # Increased for history summarization
                 temperature=0.7
             )
             if hasattr(response, 'choices') and len(response.choices) > 0:
@@ -578,12 +578,19 @@ class Chatbot:
             print("Sending request to HuggingFace API...")  # ADD THIS
             response = self.client.chat_completion(
                 messages=messages,
-                max_tokens=512,
+                max_tokens=1500,  # Increased to handle longer responses with multiple courses
                 temperature=0.7
             )
             # Extract the response text - handle different response formats
             if hasattr(response, 'choices') and len(response.choices) > 0:
-                return response.choices[0].message.content
+                response_text = response.choices[0].message.content
+                # Check if response was cut off (common indicators: ends mid-sentence, incomplete course entry)
+                # If cut off, try to complete it or at least add a note
+                if response_text and not response_text.strip().endswith(('.', '!', '?', ':')):
+                    # Response might be incomplete - check if it ends with incomplete course info
+                    if any(indicator in response_text[-50:] for indicator in ['**', 'Units:', 'Schedule:', 'Why it fits:']):
+                        response_text += "\n\n[Note: Response may have been truncated. Please ask for more details if needed.]"
+                return response_text
             elif isinstance(response, dict) and 'choices' in response:
                 return response['choices'][0]['message']['content']
             elif isinstance(response, dict) and 'generated_text' in response:
