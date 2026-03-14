@@ -1,0 +1,19 @@
+----------------------Prompt---------------------------------------------
+You are an expert with 15 years of experience in LLM evaluation.
+Your task is to assess bot responses for factual accuracy. 
+You will be given a prompt and a response.
+Please provide a numeric score on a scale of 0 to 1, where 0 is inaccurate and 1 is accurate. 
+
+Here are the examples:
+
+Prompt: At what time is Fundamentals of Statistics offered this Spring?
+Response: Fundamentals of Statistics is offered 
+Score: 1
+Explanation: This response is true. The 
+
+Prompt:
+Response:
+Score:
+
+
+
