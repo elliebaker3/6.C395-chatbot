@@ -282,16 +282,118 @@ def create_chatbot():
     
     .message.assistant .message-content,
     .message.assistant [class*="message-content"] {
-        background: #eef1f5 !important;
+        background: #dce0e6 !important;
         color: #1f2937 !important;
         border: none !important;
     }
 
-    /* Directly target Gradio's actual visible chat bubble wrappers */
+    /* Gradio 5: message row uses .message and data-testid for user/bot */
+    .message:has([data-testid="user"]),
+    .message:has([data-testid="assistant"]),
+    .message:has([data-testid="bot"]) {
+        display: flex !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+    }
+    .message:has([data-testid="user"]) {
+        justify-content: flex-end !important;
+    }
+    .message:has([data-testid="assistant"]),
+    .message:has([data-testid="bot"]) {
+        justify-content: flex-start !important;
+    }
+    /* Single user bubble: fit content width, no inner box */
+    [data-testid="user"] {
+        width: fit-content !important;
+        max-width: 70% !important;
+        margin-left: auto !important;
+        margin-right: 18px !important;
+        padding: 12px 16px !important;
+        border-radius: 16px !important;
+        background: linear-gradient(135deg, #7b6cff 0%, #6757ee 100%) !important;
+        color: white !important;
+        border: none !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
+    }
+    [data-testid="user"] .message-content,
+    [data-testid="user"] .message-content .chatbot.prose,
+    [data-testid="user"] .chatbot.prose {
+        color: white !important;
+        background: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        min-width: 0 !important;
+    }
+    /* Single assistant/bot bubble: same style as user bubble, slightly darker gray than page */
+    [data-testid="assistant"],
+    [data-testid="bot"] {
+        width: fit-content !important;
+        max-width: 70% !important;
+        margin-left: 18px !important;
+        margin-right: auto !important;
+        padding: 12px 16px !important;
+        border-radius: 16px !important;
+        background: #dce0e6 !important;
+        color: #1f2937 !important;
+        border: none !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
+    }
+    [data-testid="assistant"] .message-content,
+    [data-testid="assistant"] .message-content .chatbot.prose,
+    [data-testid="assistant"] .chatbot.prose,
+    [data-testid="bot"] .message-content,
+    [data-testid="bot"] .message-content .chatbot.prose,
+    [data-testid="bot"] .chatbot.prose {
+        background: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        min-width: 0 !important;
+    }
+    /* No extra box on the message row (e.g. panel-full-width) */
+    .message.panel-full-width:has([data-testid="user"]),
+    .message.panel-full-width:has([data-testid="assistant"]),
+    .message.panel-full-width:has([data-testid="bot"]) {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Ensure each message row is a flex container so alignment works (legacy Gradio) */
+    .chatbot div:has(> .flex-wrap.user),
+    .chatbot div:has(> .flex-wrap.assistant),
+    .chatbot div:has(> .flex-wrap.bot),
+    [class*="chatbot"] div:has(> .flex-wrap.user),
+    [class*="chatbot"] div:has(> .flex-wrap.assistant),
+    [class*="chatbot"] div:has(> .flex-wrap.bot) {
+        display: flex !important;
+        width: 100% !important;
+        justify-content: flex-start !important;
+        box-sizing: border-box !important;
+    }
+    .chatbot div:has(> .flex-wrap.user),
+    .chatbot div:has(> .flex-wrap.human),
+    [class*="chatbot"] div:has(> .flex-wrap.user),
+    [class*="chatbot"] div:has(> .flex-wrap.human) {
+        justify-content: flex-end !important;
+    }
+
+    /* Directly target Gradio's actual visible chat bubble wrappers (user = right) */
     .flex-wrap.user,
+    .flex-wrap.human,
     .chatbot .flex-wrap.user,
+    .chatbot .flex-wrap.human,
     .chatbot-container .flex-wrap.user,
-    [class*="chatbot"] .flex-wrap.user {
+    .chatbot-container .flex-wrap.human,
+    [class*="chatbot"] .flex-wrap.user,
+    [class*="chatbot"] .flex-wrap.human {
         width: fit-content !important;
         min-width: 0 !important;
         max-width: 70% !important;
@@ -326,7 +428,7 @@ def create_chatbot():
         margin-right: auto !important;
         padding: 13px 16px !important;
         border-radius: 16px !important;
-        background: #eef1f5 !important;
+        background: #dce0e6 !important;
         color: #1f2937 !important;
         border: none !important;
         box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
