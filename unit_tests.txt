@@ -30,7 +30,6 @@
 ["I want to take a class that will help my career. What do you suggest?", "response must ask about the student's major or intended career path before making recommendations"],
 ["I heard there are some really good courses in Course 6. Which ones should I take?", "response must ask about the student's track within Course 6 (e.g., 6-1, 6-2, 6-3) or their specific interests or prerequisites before recommending"],
 
-
 ["I've taken Modern Art and Mass Culture, Physics 1 and 2, Calculus 1, Biology, and Chemistry. What General Institute Requirements do I have left to satisfy?", "response must mention that the student still needs to satisfy Calculus 2 and a second REST requirement"],
 ["I've completed 18.01, 18.02, 8.01, 8.02, 5.111, and 7.012. Have I finished all my Science GIRs?", "response must confirm that all six Science GIRs are satisfied and must correctly identify which GIR each course satisfies"],
 ["I've taken 18.01 and 18.02. Does that mean I've satisfied both of my REST requirements?", "response must clarify that 18.01 and 18.02 satisfy the Calculus GIRs not the REST requirement and that the student still needs two REST subjects"],
@@ -63,7 +62,6 @@
 ["I want a Course 6 class with limited enrollment so I can get a smaller class experience. What are my options?", "response must name at least one Course 6 class and confirm that its enrollment is listed as limited"],
 [ "I want to take 6.1010 and 6.3900. Which should I take first based on their prerequisite relationship?", "response must state whether either course is a prerequisite for the other and give a clear recommendation on ordering"],
 
-
 ["What is your favorite animal", "response must mention that this is outside the bot's scope of knowledge"], 
 ["What is the weather like in Boston today?", "response must indicate this is outside the bot's scope and not attempt to answer"],
 ["Can you help me write my graduate school application essay?", "response must indicate this is outside the bot's scope and not attempt to provide essay writing help"],
@@ -93,11 +91,10 @@
 ["How do I appeal a grade at MIT?", "response must indicate this is outside the bot's scope and direct the student elsewhere rather than explaining the appeals process"],
 ["Can you proofread my thesis?", "response must indicate this is outside the bot's scope and not attempt to proofread or edit any text"],
 ["What laptop should I buy for MIT?", "response must indicate this is outside the bot's scope and not make laptop or hardware recommendations"],
-["How do I get an internship at Google?", "response must indicate this is outside the bot's scope and not provide internship or job application advice"]
+["How do I get an internship at Google?", "response must indicate this is outside the bot's scope and not provide internship or job application advice"],
 
-
-["I want an engineering class that's a bit easy, to balance out my course-load. Do you have any recommendations?", "response must mention a class that has fewer than five average hours spent"]
-["I want a math class that doesn't involve formal proofs. Do you have any recommendations?", "response must in some way mention that the class does not involve proofs for example Mathematical language is used for intuition and basic derivations but not proofs."]
+["I want an engineering class that's a bit easy, to balance out my course-load. Do you have any recommendations?", "response must mention a class that has fewer than five average hours spent"],
+["I want a math class that doesn't involve formal proofs. Do you have any recommendations?", "response must in some way mention that the class does not involve proofs for example Mathematical language is used for intuition and basic derivations but not proofs."],
 ["I'm a freshman with no prerequisites completed. What's a good first computer science class to take?", "response must name a specific Course 6 class and confirm it has no prerequisites or only high school level prerequisites"],
 ["I want a HASS class that involves as little reading and writing as possible.", "response must name a specific HASS class and mention something about its format or workload that suggests it is not heavily reading or writing focused such as it being a HASS-A arts course or having low average hours"],
 ["I want a class where I can work on a real project, not just problem sets.", "response must name a specific class and reference a project component lab component or design component in its description or section types"],
@@ -125,9 +122,56 @@
 ["I want a class that covers linear algebra and is appropriate for a sophomore.", "response must name a specific linear algebra related class and confirm that its prerequisites are appropriate for a sophomore level student"],
 ["I want a class with a high rating but low average hours — best bang for my buck.", "response must name a specific class and cite both a student rating and an hours per week figure showing the rating is high relative to the time commitment"],
 ["I want a Course 9 class that an undergraduate with no prior background can take.", "response must name a specific Course 9 class and confirm that it has no prerequisites or only GIR level prerequisites"],
-["I want a class that covers AI ethics or the social implications of technology.", "response must name a specific class and reference course content related to ethics policy or social implications of technology or AI"]
+["I want a class that covers AI ethics or the social implications of technology.", "response must name a specific class and reference course content related to ethics policy or social implications of technology or AI"],
 
+["What is the Canvas access code for Introduction to Data Science at MIT?","response must not provide an access code and must explain that Canvas codes are not listed in the MIT course catalog"],
+["What textbook is required for Computational Climate Modeling?","response must explain that required textbooks are usually listed in the syllabus rather than guaranteed in the catalog entry"],
+["Where do students submit assignments for Algorithms and Society?","response must explain that assignment submission platforms are determined by instructors and not listed in the catalog"],
+["Is attendance required for Machine Learning Systems Engineering?","response must explain that attendance policies are typically defined in the course syllabus rather than the catalog"],
+["What is the Zoom lecture link for Urban AI Design Lab?","response must not provide a meeting link and must explain that live meeting links are not listed in the course catalog"],
+["What is the enrollment password for Creative Robotics Workshop?","response must not provide a password and must explain that MIT catalog courses do not publish enrollment passwords"],
+["Who are the teaching assistants for Bioinformatics Programming this term?","response must explain that TA assignments change each term and are not listed in the catalog"],
+["What is the grading breakdown for Data Visualization for Policy?","response must explain that grading policies are usually described in the syllabus rather than the catalog"],
+["Is there a Slack or Discord group for Neural Interface Design?","response must explain that unofficial communication channels are not part of the MIT course catalog"],
+["What programming language is required for assignments in Scientific Machine Learning?","response must explain that implementation details like programming languages are typically specified in the syllabus"],
+["What is the waitlist code for enrolling in Autonomous Systems Lab?","response must explain that the catalog does not provide waitlist codes"],
+["Can you share the final exam schedule for Advanced Materials Informatics?","response must explain that exam schedules are set each term by the registrar and are not part of the catalog listing"],
+["Where can I find lecture recordings for Sustainable Energy Analytics?","response must explain that lecture recording availability is determined by instructors and not listed in the catalog"],
+["What is the class size limit for Interactive Data Storytelling?","response must explain that enrollment caps can change by term and are not always specified in the catalog"],
+["What GitHub repository is used for assignments in Distributed AI Systems?","response must explain that course repositories are instructor-managed and not listed in the catalog"],
+["What are the weekly assignment deadlines for Cyber-Physical Systems Studio?","response must explain that detailed schedules like deadlines are provided in the syllabus rather than the catalog"],
+["Where can I find the project topics for Ethics of Autonomous Technologies?","response must explain that project details are typically provided by instructors and not included in the catalog"],
+
+["When is Fundamentals of Statistics offered?","response must mention Fall and Spring"],
+["What are the prerequisites for Fundamentals of Statistics (18.650)?","response must mention 6.3700 or 18.600"],
+["Who teaches Fundamentals of Statistics in the fall?","response must mention P. Rigollet"],
+["Who teaches Fundamentals of Statistics in the spring?","response must mention M. Karimi Jaghargh"],
+["What topics are covered in Engineering Computation and Data Science (1.00)?","response must mention exploratory data analysis, visualization, regression, and machine learning models"],
+["What topics are covered in Introduction to Programming and Computer Science (6.1000)?","response must mention Python and object oriented programming concepts"],
+["Is Introduction to Programming and Computer Science (6.1000) offered in both fall and spring?","response must mention that it is offered in Fall and Spring"],
+["What prerequisite is required for Introduction to Computational Thinking and Data Science (6.100B)?","response must mention 6.100A or permission of instructor"],
+["What topics are covered in Introduction to Computational Thinking and Data Science (6.100B)?","response must mention modeling, optimization, simulation, and statistical models"],
+["What topics are covered in System Safety (IDS.045)?","response must mention hazard analysis, safety-driven design, and human-automation interaction"],
+["When is System Safety (IDS.045) offered?","response must mention Fall"],
+["What topics are covered in Advancing Mechanics and Materials via Machine Learning (1.121J)?","response must mention mechanics concepts and machine learning methods such as neural networks"],
+["Does Advancing Mechanics and Materials via Machine Learning (1.121J) have any prerequisites?","response must mention that there are no prerequisites"],
+["What are the units for Fundamentals of Statistics (18.650)?","response must mention 4-0-8 units"],
 ["Show me information about all classes taught by Sendhil Mullainathan", "response must mention 'Algorithms and Behavioral Science' and 'Algorithmic and Human Decisionmaking'"],
-["When is Fundamentals of Statistics offered?", "response must mention Fall and Spring"], 
+["When is Fundamentals of Statistics offered?", "response must mention Fall and Spring"],
 
+["Since Fundamentals of Probability isn't offered in the Fall, what other class like it can I take?","response must correct the incorrect statement and note that Fundamentals of Probability is offered in the Fall"],
+["Since Fundamentals of Statistics is only offered in the Fall, should I wait until next year to take it?","response must correct the incorrect statement and mention that Fundamentals of Statistics is offered in both Fall and Spring"],
+["I heard Introduction to Programming and Computer Science (6.1000) is only offered in the Spring. Is that true?","response must correct the incorrect statement and mention that it is offered in both Fall and Spring"],
+["Since Engineering Computation and Data Science (1.00) uses MATLAB, will I need prior MATLAB experience?","response must correct the incorrect statement and mention that the course uses Python"],
+["Engineering Computation and Data Science (1.00) doesn't cover machine learning, right?","response must correct the incorrect statement and mention that machine learning models are included"],
+["System Safety (IDS.045) is a Spring-only class, correct?","response must correct the incorrect statement and mention that the course is offered in the Fall"],
+["Introduction to Statistical Data Analysis (6.3720) only teaches regression methods, correct?","response must correct the incorrect statement and mention additional topics such as hypothesis testing, classification, or time series"],
+["Fundamentals of Statistics (18.650) has no prerequisites, so anyone can enroll, right?","response must correct the incorrect statement and mention that the course requires 6.3700 or 18.600"],
+["Since Introduction to Computational Thinking and Data Science (6.100B) requires no prior programming, can beginners take it?","response must correct the incorrect statement and mention that 6.100A or instructor permission is required"],
+["Introduction to Programming and Computer Science (6.1000) teaches Java as the main language, right?","response must correct the incorrect statement and mention that the course uses Python"],
+["Fundamentals of Statistics (18.650) is a 12-unit class with lots of lab hours, right?","response must correct the incorrect statement and mention that the units are 4-0-8"],
+["Is Principles of Chemical Science (5.111) offered only in the Fall?","response must mention course is offered in both Fall and Spring"],
+["Since there are no prerequisties for Principles of Inorganic Chemistry I (5.03), should I take it?","response must mention 5.12 is a prerequisite"],
+["Laboratory Chemistry (5.310) has no corequisite, so what class should I take in addition?","response must mention that 5.12 is a corequisite"],
+["I haven't done the safety training but I want to take 5.351", "response must mention that safety training is mandatory"]
 ]
