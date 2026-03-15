@@ -124,8 +124,8 @@ class Chatbot:
                 texts = []
                 for msg in history_items:
                     try:
-                        # Handle Gradio tuple format: (user_msg, assistant_msg)
-                        if isinstance(msg, tuple) and len(msg) == 2:
+                        # Handle both list and tuple format: [user_msg, assistant_msg]
+                        if (isinstance(msg, (list, tuple))) and len(msg) == 2:
                             user_msg, assistant_msg = msg
                             user_text = user_msg if isinstance(user_msg, str) else str(user_msg)
                             assistant_text = assistant_msg if isinstance(assistant_msg, str) else str(assistant_msg)
@@ -133,24 +133,23 @@ class Chatbot:
                                 texts.append(f"User: {user_text}")
                             if assistant_text:
                                 texts.append(f"Assistant: {assistant_text}")
-                        # Handle dict format
                         elif isinstance(msg, dict):
                             content = msg.get("content")
                             if isinstance(content, list):
-                                # Handle list format: [{"type": "text", "text": "..."}, ...]
                                 for c in content:
                                     if isinstance(c, dict) and c.get("type") == "text":
                                         text = c.get("text", "")
                                         if text:
                                             texts.append(text)
                             elif isinstance(content, str):
-                                # Handle string format: just use the string directly
                                 if content:
                                     texts.append(content)
                     except Exception as e:
-                        # Skip malformed messages
                         print(f"Warning: Could not extract text from history message: {e}")
                         continue
+                print(f"++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+                print(f"texts: {texts}")
+                print(f"++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
                 return texts
             try:
                 history_str = "\n".join(_extract_text(history[-3:]))
@@ -163,7 +162,7 @@ class Chatbot:
             Conversation history: {history_str}
             Question: "{user_input}"
 
-            Respond with only "YES" if the user question is relevant in the conversation history
+            Respond with only "YES" if the user question is responding to the conversation history
             or can be directly about MIT courses/course selection/catalog, or "NO" if it's about something else."""
 
         try:
