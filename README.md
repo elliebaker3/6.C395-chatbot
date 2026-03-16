@@ -1,5 +1,5 @@
 ---
-title: 6.C395 Chatbot
+title: 6-C395-chatbot
 emoji: 🚀
 colorFrom: blue
 colorTo: red

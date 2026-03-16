@@ -768,8 +768,10 @@ def create_chatbot():
     """
     
     # Create Gradio interface with custom styling
+    # title must be a valid HF repo id: alphanumeric, '-', '_', '.' only (no spaces)
     with gr.Blocks(
-        css=custom_css, 
+        title="6-C395-chatbot",
+        css=custom_css,
         theme=gr.themes.Soft(
             primary_hue="purple",
             secondary_hue="slate",
@@ -1016,4 +1018,4 @@ def create_chatbot():
 
 if __name__ == "__main__":
     demo = create_chatbot()
-    demo.launch(show_api=False)  # Hide API documentation
+    # demo.launch(show_api=False, share=True)  # Hide API documentation

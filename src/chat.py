@@ -834,7 +834,23 @@ Respond with only YES or NO."""
         # RAG: retrieve relevant course chunks before building the system prompt
         retrieved_context = ""
         if include_data and self.course_data:
-            retrieved_context = rag.get_relevant_context(user_input, top_k=8, data_path="data.json")
+            # Build a richer RAG query using history context
+            rag_query = user_input
+            if history:
+                # Normalize flat list
+                history_normalized = [history] if (len(history) == 2 and isinstance(history[0], str)) else history
+                # Extract last 2 user messages to add context
+                recent_user_msgs = []
+                for msg in history_normalized[-2:]:
+                    if isinstance(msg, (list, tuple)) and len(msg) == 2:
+                        user_msg = msg[0] if isinstance(msg[0], str) else str(msg[0])
+                        if user_msg:
+                            recent_user_msgs.append(user_msg)
+                if recent_user_msgs:
+                    rag_query = " ".join(recent_user_msgs) + " " + user_input
+                    print(f"RAG query with history: {rag_query[:100]}")
+
+            retrieved_context = rag.get_relevant_context(rag_query, top_k=5, data_path="data.json")
             if not retrieved_context.strip():
                 retrieved_context = "(No relevant course excerpts retrieved from the catalog.)"
         
