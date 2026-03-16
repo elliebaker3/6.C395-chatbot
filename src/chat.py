@@ -27,7 +27,7 @@ class Chatbot:
         Initialize the chatbot with a HF model ID
         """
         model_id = MY_MODEL if MY_MODEL else BASE_MODEL # define MY_MODEL in config.py if you create a new model in the HuggingFace Hub
-        self.client = InferenceClient(model=model_id, token=HF_TOKEN)
+        self.client = InferenceClient(provider="sambanova", api_key=HF_TOKEN)
         
         # Load MIT course catalog data and ensure RAG index exists (from cache or build once)
         path = _data_path()
@@ -115,8 +115,7 @@ class Chatbot:
         Returns:
             bool: True if the question is about MIT courses, False otherwise
         """
-        # iterate through the last 3 histories, if they exist and concatenate them into a single string
-        print(f"Classifying question with {len(history) if history else 0} history items")  # ADD THIS
+        print(f"Classifying question with {len(history) if history else 0} history items")
 
         history_str = ""
         if history:
@@ -124,8 +123,7 @@ class Chatbot:
                 texts = []
                 for msg in history_items:
                     try:
-                        # Handle both list and tuple format: [user_msg, assistant_msg]
-                        if (isinstance(msg, (list, tuple))) and len(msg) == 2:
+                        if isinstance(msg, (list, tuple)) and len(msg) == 2:
                             user_msg, assistant_msg = msg
                             user_text = user_msg if isinstance(user_msg, str) else str(user_msg)
                             assistant_text = assistant_msg if isinstance(assistant_msg, str) else str(assistant_msg)
@@ -147,37 +145,44 @@ class Chatbot:
                     except Exception as e:
                         print(f"Warning: Could not extract text from history message: {e}")
                         continue
-                print(f"++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-                print(f"texts: {texts}")
-                print(f"++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
                 return texts
             try:
-                history_str = "\n".join(_extract_text(history[-3:]))
+                if len(history) == 2 and isinstance(history[0], str):
+                    history_items = [history]
+                else:
+                    history_items = history[-3:]
+                history_str = "\n".join(_extract_text(history_items))
             except Exception as e:
                 print(f"Warning: Could not process history: {e}")
                 history_str = ""
 
-        # Classification prompt focused on MIT course selection
-        classification_prompt = f"""Classify whether the following question is about MIT courses, course selection, the MIT course catalog, prerequisites, class schedules, distribution requirements (CI-H, HASS, REST), departments, instructors, or academic planning at MIT. 
-            Conversation history: {history_str}
-            Question: "{user_input}"
+        # Updated classification prompt that considers history and follow-ups together
+        classification_prompt = f"""You are classifying whether a user message is relevant to an ongoing conversation about MIT courses.
 
-            Respond with only "YES" if the user question is responding to the conversation history
-            or can be directly about MIT courses/course selection/catalog, or "NO" if it's about something else."""
+Conversation history (last 3 exchanges):
+{history_str}
+
+New user message: "{user_input}"
+
+Consider BOTH the history and the new message together. If the conversation has been about MIT courses, schedules, requirements, or academic planning, and the new message is a natural follow-up (even if it's just "sure", "yes", "tell me more", etc.), classify it as YES.
+
+Only classify as NO if the new message is clearly off-topic and unrelated to anything in the conversation history.
+
+Respond with only YES or NO."""
 
         try:
             messages = [
                 {"role": "system", "content": "You are a classification assistant. Respond with only YES or NO."},
-                {"role": "user", "content": classification_prompt + "\n\n" + history_str}
+                {"role": "user", "content": classification_prompt}
             ]
             
             response = self.client.chat_completion(
+                model="meta-llama/Llama-3.1-8B-Instruct",
                 messages=messages,
                 max_tokens=10,
                 temperature=0.1
             )
             
-            # Extract response
             if hasattr(response, 'choices') and len(response.choices) > 0:
                 result = response.choices[0].message.content.strip().upper()
             elif isinstance(response, dict) and 'choices' in response:
@@ -187,8 +192,6 @@ class Chatbot:
             
             return "YES" in result
         except Exception:
-            # Fallback: simple keyword check for MIT course-related terms
-            # Add these to the mit_course_keywords list
             mit_course_keywords = [
                 'course', 'class', 'mit', 'catalog', 'prerequisite', 'schedule', 
                 'department', 'instructor', 'ci-h', 'hass', 'rest', 'distribution', 
@@ -196,7 +199,7 @@ class Chatbot:
                 'undergrad', 'graduate', 'yes', 'no', 'any', 'sure', 'ok', 'afternoon',
                 'morning', 'evening', 'spring', 'fall', 'semester'
             ]
-            return any(keyword.lower() in user_input.lower() for keyword in mit_course_keywords)
+            return any(keyword.lower() in user_input.lower() for keyword in mit_course_keywords)   
     
     def _detect_specific_entities(self, user_input, history=None):
         """
@@ -218,7 +221,7 @@ class Chatbot:
         # Extract course numbers from history
         if history:
             for msg in history[-5:]:  # Check last 5 exchanges
-                if isinstance(msg, tuple) and len(msg) == 2:
+                if isinstance(msg, (list, tuple)) and len(msg) == 2:
                     user_msg, assistant_msg = msg
                     text = (user_msg if isinstance(user_msg, str) else str(user_msg)) + " " + (assistant_msg if isinstance(assistant_msg, str) else str(assistant_msg))
                     matches = re.findall(course_pattern, text)
@@ -265,7 +268,7 @@ class Chatbot:
         # Also check history for professor mentions
         if history:
             for msg in history[-5:]:
-                if isinstance(msg, tuple) and len(msg) == 2:
+                if isinstance(msg, (list, tuple)) and len(msg) == 2:
                     user_msg, assistant_msg = msg
                     text = (user_msg if isinstance(user_msg, str) else str(user_msg)) + " " + (assistant_msg if isinstance(assistant_msg, str) else str(assistant_msg))
                     for pattern in professor_patterns:
@@ -276,7 +279,7 @@ class Chatbot:
                             if match and match.lower() not in ['mit', 'fall', 'spring', 'summer', 'iap'] and not self._is_generic_professor_label(match):
                                 professor_names.add(match.strip())
         
-        return professor_names, course_numbers
+        return professor_names, course_numbers    
 
     def extract_entities_from_final_response(self, assistant_response):
         """
@@ -302,6 +305,7 @@ class Chatbot:
 
         try:
             response = self.client.chat_completion(
+                model="meta-llama/Llama-3.1-8B-Instruct",
                 messages=[
                     {"role": "system", "content": extractor_system},
                     {"role": "user", "content": extractor_user},
@@ -498,6 +502,7 @@ class Chatbot:
         try:
             print("Sending request to HuggingFace API...")
             response = self.client.chat_completion(
+                model="meta-llama/Llama-3.1-8B-Instruct",
                 messages=messages,
                 max_tokens=1500,
                 temperature=0.7,
@@ -526,9 +531,14 @@ class Chatbot:
                     parsed["response"] = response_text + "\n\n[Note: Response may have been truncated. Please ask for more details if needed.]"
             return parsed
         except Exception as e:
-            error_msg = f"Error generating response: {str(e)}. Please check your HF_TOKEN and model access."
+            import traceback
+            import sys
+            print("FULL ERROR IN get_response_bundle:", flush=True)
+            traceback.print_exc(file=sys.stdout)
+            sys.stdout.flush()
+            error_msg = f"Error generating response: {str(e)}"
             return {"response": error_msg, "courses": [], "professors": [], "raw": error_msg}
-
+        
     def summarize_entity_relevance(self, entity_type, entity_name, conversation_text):
         """
         Generate a short (1-2 sentence or brief bullet) explanation of how an entity
@@ -556,6 +566,7 @@ class Chatbot:
                 },
             ]
             response = self.client.chat_completion(
+                model="meta-llama/Llama-3.1-8B-Instruct",
                 messages=messages,
                 max_tokens=140,
                 temperature=0.3,
@@ -606,6 +617,7 @@ class Chatbot:
                 },
             ]
             response = self.client.chat_completion(
+                model="meta-llama/Llama-3.1-8B-Instruct",
                 messages=messages,
                 max_tokens=20,
                 temperature=0.0,
@@ -828,7 +840,13 @@ class Chatbot:
         
         # Combine persistent context, direct lookups, and RAG results
         all_direct_chunks = persistent_chunks + direct_course_chunks
-        
+        # Debug: print what's being sent to the model
+        print(f"Persistent context chunks: {len(persistent_chunks)}")
+        print(f"Direct course chunks: {len(direct_course_chunks)}")
+        print(f"Total direct chunks: {len(all_direct_chunks)}")
+        print(f"Persistent courses: {list(self._persistent_context['courses'].keys())}")
+        print(f"Persistent professors: {list(self._persistent_context['professors'].keys())}")
+                
         if all_direct_chunks:
             # Remove duplicates while preserving order
             seen = set()
@@ -873,10 +891,12 @@ class Chatbot:
         
         # Add conversation history to messages
         if history:
+            # Normalize flat [user, assistant] list to [[user, assistant]]
+            if len(history) == 2 and isinstance(history[0], str):
+                history = [history]
             for msg in history:
                 try:
-                    # Gradio ChatInterface passes history as list of tuples: [(user_msg, assistant_msg), ...]
-                    if isinstance(msg, tuple) and len(msg) == 2:
+                    if isinstance(msg, (list, tuple)) and len(msg) == 2:
                         user_msg, assistant_msg = msg
                         # Extract text from user message
                         if isinstance(user_msg, str):
@@ -923,8 +943,11 @@ class Chatbot:
         try:
             # Convert history tuples to readable text
             history_text = ""
+            # Normalize flat [user, assistant] list to [[user, assistant]]
+            if len(history) == 2 and isinstance(history[0], str):
+                history = [history]
             for msg in history:
-                if isinstance(msg, tuple) and len(msg) == 2:
+                if isinstance(msg, (list, tuple)) and len(msg) == 2:
                     user_msg, assistant_msg = msg
                     user_text = user_msg if isinstance(user_msg, str) else str(user_msg)
                     assistant_text = assistant_msg if isinstance(assistant_msg, str) else str(assistant_msg)
@@ -937,6 +960,7 @@ class Chatbot:
                 {"role": "user", "content": history_text}
             ]
             response = self.client.chat_completion(
+                model="meta-llama/Llama-3.1-8B-Instruct",
                 messages=messages,
                 max_tokens=1024,  # Increased for history summarization
                 temperature=0.7
